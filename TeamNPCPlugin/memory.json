@@ -1,0 +1,349 @@
+{
+  "plugin_name": "TeamNPCPlugin",
+  "version": "2.0.0",
+  "author": "stardust",
+  "description": "Team NPC separation plugin with map partition-based housing system - Red and Blue teams each have independent town NPCs with official Terraria housing validation",
+
+  "purpose": "Implements a custom NPC faction system where Red team (team ID 1) and Blue team (team ID 3) each have their own separate instances of all town NPCs. Each team must independently meet the arrival conditions for their NPCs. Version 2.0 adds map-based partitioning (left/right split) with comprehensive housing validation and persistence.",
+
+  "key_features": [
+    "Map-based partitioning: Left side (x <= Main.spawnTileX) = Red team, Right side (x > Main.spawnTileX) = Blue team",
+    "Official Terraria housing validation: Room size (60-750 tiles), furniture requirements, background walls",
+    "Spiral search algorithm for efficient house finding within partition boundaries",
+    "Housing assignment persistence: Survives server restarts via JSON storage",
+    "Auto-save every 5 minutes (configurable)",
+    "Separate NPC instances for Red and Blue teams",
+    "Independent arrival condition tracking per team",
+    "Prevents vanilla NPC spawning - plugin manages all town NPC spawning",
+    "Team-colored arrival messages (red for Red team, blue for Blue team)",
+    "MoveNPC restriction - only same-team players can move NPCs",
+    "No dialogue restriction - all players can talk to any NPC",
+    "Automatic NPC respawning when conditions are met",
+    "Configurable spawn centers and check intervals"
+  ],
+
+  "architecture": {
+    "main_class": "TeamNPCPlugin.cs",
+    "components": [
+      {
+        "file": "TeamState.cs",
+        "purpose": "Tracks team state including players, money, items collected, biomes visited, and NPC count. NEW in v2.0: Partition boundaries (MinX/MaxX), spiral search algorithm, house assignment tracking with HouseAssignment objects.",
+        "lines": 275,
+        "v2_additions": "MinX/MaxX properties, HousingValidator reference, GenerateSpiralPattern(), IsHouseOccupied(), AssignHouse(), ReleaseHouse(), GetHouseAssignments()"
+      },
+      {
+        "file": "NPCTeamManager.cs",
+        "purpose": "Manages NPC-to-team mappings using Dictionary<int, string> for NPC index to team, and Dictionary<(string, string), List<int>> for tracking NPCs per team."
+      },
+      {
+        "file": "Configuration.cs",
+        "purpose": "JSON configuration management using System.Text.Json. Stores spawn centers, check intervals, and plugin settings. NEW in v2.0: Partition settings, housing validation options, persistence settings.",
+        "lines": 62,
+        "v2_additions": "PartitionBoundary, EnableStrictHousingValidation, MinHouseDistance, EnableHousingPersistence, AutoSaveIntervalSeconds, SpiralSearchRadius"
+      },
+      {
+        "file": "TownNPCDefinitions.cs",
+        "purpose": "Defines spawn rules for 25+ town NPCs with Func<TeamState, bool> conditions and NPCID mappings."
+      },
+      {
+        "file": "NPCSpawnController.cs",
+        "purpose": "Handles NPC spawning via NPC.NewNPC(), blocks vanilla spawns via OnNpcSpawn event, sets NPC homes, and manages town NPC lifecycle."
+      },
+      {
+        "file": "ArrivalConditionChecker.cs",
+        "purpose": "Checks spawn conditions every 10 seconds (configurable). Validates 4 required conditions: daytime, no special events, NPC-specific conditions, and valid unoccupied housing. NEW in v2.0: Auto-save functionality, persistence saving after NPC spawn/death.",
+        "lines": 188,
+        "v2_additions": "autoSaveTicks counter, config reference, auto-save logic in OnGameUpdate(), HousingPersistence.Save() calls"
+      },
+      {
+        "file": "HousingValidator.cs",
+        "purpose": "NEW in v2.0: Implements official Terraria housing validation standards. Validates room size (60-750 tiles), checks required furniture (light source, flat surface, comfort item), verifies player-placed background walls, calculates home tile scores.",
+        "lines": 388,
+        "key_methods": "ValidateHousing(), CheckRoomWithWorldGen(), CheckRoomSize(), CheckRequiredFurniture(), HasLightSource(), HasFlatSurface(), HasComfortItem(), CheckBackgroundWalls(), FindBestHomeTile(), CalculateHomeTileScore()"
+      },
+      {
+        "file": "HousingPersistence.cs",
+        "purpose": "NEW in v2.0: Manages JSON persistence of housing assignments. Saves/loads housing data to tshock/teamnpc_housing.json, revalidates houses on load, handles server restarts gracefully.",
+        "lines": 195,
+        "key_classes": "HouseAssignment, TeamHousingData, HousingPersistenceData",
+        "key_methods": "Save(), Load(), ApplyToTeamStates()"
+      }
+    ]
+  },
+
+  "spawn_conditions": {
+    "description": "NPCs spawn only when ALL 4 conditions are met",
+    "conditions": [
+      {
+        "id": 1,
+        "name": "Daytime",
+        "check": "Main.dayTime must be true"
+      },
+      {
+        "id": 2,
+        "name": "No Special Events",
+        "check": "No invasion, eclipse, blood moon, pumpkin moon, snow moon, slime rain, or rain",
+        "implementation": "IsSpecialEvent() method checks Main.invasionType, Main.eclipse, Main.bloodMoon, Main.pumpkinMoon, Main.snowMoon, Main.slimeRain, Main.raining"
+      },
+      {
+        "id": 3,
+        "name": "NPC-Specific Conditions",
+        "check": "Each NPC has unique spawn requirements defined in TownNPCDefinitions.TownNpcSpawnRules",
+        "examples": [
+          "Merchant: team.Money >= 5000 (50 silver)",
+          "Nurse: team.PlayerUsedLifeCrystal",
+          "Arms Dealer: team.PlayerHasGun",
+          "Dryad: NPC.downedBoss1",
+          "Wizard: Main.hardMode"
+        ]
+      },
+      {
+        "id": 4,
+        "name": "Valid Unoccupied Housing",
+        "check": "Must have a valid house that is not occupied by another NPC, within team's partition boundaries",
+        "implementation_v2": "HousingValidator.ValidateHousing() performs comprehensive checks: (1) WorldGen.StartRoomCheck() for basic room structure, (2) Room size 60-750 tiles, (3) Required furniture detection (light source, flat surface, comfort item), (4) Player-placed background walls only, (5) Home tile scoring system (base 50, solid tile -5, empty +5, closed door -20, must have 3 tiles standing room)",
+        "partition_constraint": "Spiral search only within MinX to MaxX boundaries, left partition (x <= Main.spawnTileX) for Red team, right partition (x > Main.spawnTileX) for Blue team",
+        "search_algorithm": "GenerateSpiralPattern() creates outward spiral from spawn center (150 tile radius default), checking each point for validity and occupation status"
+      }
+    ]
+  },
+
+  "configuration": {
+    "file_path": "tshock/teamnpc.json",
+    "persistence_file_path": "tshock/teamnpc_housing.json",
+    "default_settings": {
+      "EnablePlugin": true,
+      "CheckIntervalSeconds": 10,
+      "RedTeamSpawnX": -200,
+      "RedTeamSpawnY": 150,
+      "BlueTeamSpawnX": 200,
+      "BlueTeamSpawnY": 150,
+      "HouseSearchRadius": 100,
+      "ClearNPCsOnLoad": true,
+      "EnableDebugLog": false,
+      "PartitionBoundary": -1,
+      "EnableStrictHousingValidation": true,
+      "MinHouseDistance": 10,
+      "EnableHousingPersistence": true,
+      "AutoSaveIntervalSeconds": 300,
+      "SpiralSearchRadius": 150
+    },
+    "v2_new_settings": {
+      "PartitionBoundary": "-1 means use Main.spawnTileX automatically, or set specific X coordinate",
+      "EnableStrictHousingValidation": "When true, uses full Terraria housing validation (furniture, walls, room size)",
+      "MinHouseDistance": "Minimum distance in tiles between NPC houses (occupation check radius)",
+      "EnableHousingPersistence": "Save/load housing assignments to JSON file",
+      "AutoSaveIntervalSeconds": "How often to auto-save housing data (300 = 5 minutes)",
+      "SpiralSearchRadius": "Maximum search radius from spawn center for valid houses"
+    }
+  },
+
+  "api_usage": {
+    "terraria_apis": [
+      "NPC.NewNPC() - Spawns NPCs with EntitySource_DebugCommand",
+      "Main.tile[x, y] - ITile interface with .active() and .type properties",
+      "Main.npc[] - Array of all NPCs in the world",
+      "Main.dayTime, Main.hardMode - World state flags",
+      "NPC.downedBoss1, NPC.downedGoblins, etc. - Boss defeat flags",
+      "WorldGen.StartRoomCheck(x, y) - NEW v2.0: Validates room structure, sets WorldGen.roomX1/Y1/X2/Y2 boundaries",
+      "WorldGen.roomX1/Y1/X2/Y2 - Room boundary coordinates after StartRoomCheck()",
+      "Main.spawnTileX - World spawn point X coordinate, used as partition boundary",
+      "Main.tileSolid[type] - Check if tile type is solid",
+      "TileID.* constants - Tile type identifiers (Torches, Chairs, Tables, etc.)",
+      "WallID.* constants - Wall type identifiers for natural wall detection"
+    ],
+    "tshock_apis": [
+      "ServerApi.Hooks.GamePostInitialize - Post-initialization hook",
+      "ServerApi.Hooks.GameUpdate - Game update hook (60 ticks/second)",
+      "ServerApi.Hooks.NpcSpawn - NPC spawn event hook",
+      "ServerApi.Hooks.NpcKilled - NPC death event hook",
+      "GetDataHandlers.NPCHome - NPC home change packet handler",
+      "TSPlayer.All.SendData() - Syncs data to all clients",
+      "player.TPlayer.team - Player team ID (1=Red, 3=Blue)",
+      "TShock.Log.Info/Error - Logging methods"
+    ]
+  },
+
+  "event_handling": {
+    "OnPostInit": "Clears existing town NPCs if ClearNPCsOnLoad is enabled",
+    "OnGameUpdate": "Delegates to ArrivalConditionChecker.OnGameUpdate() for periodic condition checking",
+    "OnNpcSpawn": "Blocks vanilla town NPC spawning by setting args.Handled = true and npc.active = false",
+    "OnNpcKilled": "Unregisters NPC from team manager, allows automatic respawn if conditions still met",
+    "OnUpdateNPCHome": "Prevents cross-team NPC movement by checking player.TPlayer.team against npc team, restores original position if denied"
+  },
+
+  "important_implementation_details": {
+    "npc_registration": "When spawning, NPC index is registered with NPCTeamManager.RegisterNPC(index, npcName, teamName)",
+    "arrival_messages": "Only sent when npcIndex >= 0 (spawn succeeded), uses team-colored messages via Color.Red or Color.Blue",
+    "housing_validation_v2": "HousingValidator performs multi-step validation: (1) WorldGen.StartRoomCheck() for structure, (2) Size check 60-750 tiles, (3) Furniture detection via HashSet lookups, (4) Background wall validation against NaturalWalls list, (5) Home tile scoring with standing room check",
+    "partition_boundaries": "Red team MinX=0 MaxX=partitionBoundary, Blue team MinX=partitionBoundary+1 MaxX=Main.maxTilesX, boundary defaults to Main.spawnTileX",
+    "spiral_search": "GenerateSpiralPattern() creates square spiral: top row left-to-right, right column top-to-bottom, bottom row right-to-left, left column bottom-to-top, expanding outward 1 tile per loop",
+    "house_occupation": "IsHouseOccupied() checks if any NPC within 5 tiles (configurable via MinHouseDistance), tracks via npcHouseAssignments dictionary",
+    "persistence_flow": "Save triggered on: (1) Plugin Dispose, (2) NPC spawn, (3) NPC death, (4) Auto-save timer (every 5 min). Load on plugin Initialize, revalidates all houses with HousingValidator",
+    "tile_api": "Uses ITile interface: tile.active() to check if active, tile.type for tile type, tile.wall for wall type, Main.tileSolid[] for solid check. IMPORTANT: Use 'var' instead of 'Tile' type to avoid ITile/Tile conversion errors",
+    "spawn_timing": "Checks every 10 seconds (600 ticks at 60fps) by default, configurable via CheckIntervalSeconds",
+    "npc_home_setting": "Sets homeTileX, homeTileY, homeless=false, then syncs with PacketTypes.UpdateNPCHome",
+    "house_preservation": "On NPC death, house assignment is NOT released - preserved for respawn. House only released manually or if validation fails on reload"
+  },
+
+  "build_info": {
+    "target_framework": "net9.0",
+    "dependencies": [
+      "TShockAPI (v5.2.0)",
+      "OTAPI (v3.1.19)",
+      "TerrariaServer (v1.4.4.9)",
+      "NuGet.Frameworks (v6.11.1)"
+    ],
+    "output_path": "bin/Debug/net9.0/TeamNPCPlugin.dll",
+    "build_command": "dotnet build"
+  },
+
+  "issues_fixed_during_development": [
+    {
+      "issue": "Newtonsoft.Json dependency not found",
+      "solution": "Changed from Newtonsoft.Json to System.Text.Json",
+      "version": "1.0"
+    },
+    {
+      "issue": "WorldGen.roomOccupied array access error",
+      "solution": "Simplified housing validation to manually check for occupied houses",
+      "version": "1.0"
+    },
+    {
+      "issue": "Arrival messages sent but NPCs not spawning",
+      "solution": "Moved SendArrivalMessage() inside if (npcIndex >= 0) check",
+      "version": "1.0"
+    },
+    {
+      "issue": "ITile interface type mismatch",
+      "solution": "Changed from tile.HasTile to tile.active() and tile.TileType to tile.type",
+      "version": "1.0"
+    },
+    {
+      "issue": "TileID constants not found (Tiki, SkullLantern, HeartLantern, etc.)",
+      "solution": "Removed non-existent TileID constants from light source list, kept only compatible tile types",
+      "version": "2.0"
+    },
+    {
+      "issue": "WallID constants not found (WoodUnsafe, GrayBrickUnsafe, RedBrickUnsafe)",
+      "solution": "Removed non-existent WallID constants from natural walls list",
+      "version": "2.0"
+    },
+    {
+      "issue": "Cannot implicitly convert ITile to Tile errors",
+      "solution": "Changed all 'Tile tile' declarations to 'var tile' to use ITile interface",
+      "version": "2.0"
+    }
+  ],
+
+  "npc_list": [
+    "Guide", "Merchant", "Nurse", "Demolitionist", "Arms Dealer", "Dryad",
+    "Painter", "Angler", "Goblin Tinkerer", "Witch Doctor", "Clothier",
+    "Mechanic", "Party Girl", "Wizard", "Tax Collector", "Truffle", "Pirate",
+    "Steampunker", "Cyborg", "Santa Claus", "Princess", "Golfer", "Zoologist",
+    "Tavernkeep", "Stylist", "Dye Trader"
+  ],
+
+  "usage_instructions": {
+    "installation": [
+      "1. Build the plugin: cd ServerPlugins/TeamNPCPlugin && dotnet build",
+      "2. Copy TeamNPCPlugin.dll from bin/Debug/net9.0/ to TShock ServerPlugins folder",
+      "3. Restart TShock server",
+      "4. Configuration file will be auto-generated at tshock/teamnpc.json"
+    ],
+    "configuration_steps": [
+      "1. Edit tshock/teamnpc.json to set spawn centers for Red and Blue teams",
+      "2. RedTeamSpawnX/Y should be near Red team base",
+      "3. BlueTeamSpawnX/Y should be near Blue team base",
+      "4. HouseSearchRadius determines how far from spawn center to search for valid houses",
+      "5. Set EnableDebugLog to true for detailed logging"
+    ],
+    "team_assignment": "Players must join teams using Terraria's built-in team system (T key) - Red team (1) or Blue team (3)"
+  },
+
+  "development_workflow": {
+    "description": "After each code modification, follow these steps to build and deploy",
+    "steps": [
+      "1. Build the plugin: dotnet build (in /Users/lhy/Documents/TShock/ServerPlugins/TeamNPCPlugin)",
+      "2. Copy DLL: Copy TeamNPCPlugin.dll from bin/Debug/net9.0/ to TShockLauncher/bin/Debug/net9.0/ServerPlugins",
+      "3. Restart TShock server to load the updated plugin"
+    ],
+    "source_path": "/Users/lhy/Documents/TShock/ServerPlugins/TeamNPCPlugin/bin/Debug/net9.0/TeamNPCPlugin.dll",
+    "deploy_path": "/Users/lhy/Documents/TShock/TShockLauncher/bin/Debug/net9.0/ServerPlugins/TeamNPCPlugin.dll",
+    "quick_commands": [
+      "cd /Users/lhy/Documents/TShock/ServerPlugins/TeamNPCPlugin && dotnet build",
+      "cp /Users/lhy/Documents/TShock/ServerPlugins/TeamNPCPlugin/bin/Debug/net9.0/TeamNPCPlugin.dll /Users/lhy/Documents/TShock/TShockLauncher/bin/Debug/net9.0/ServerPlugins/"
+    ]
+  },
+
+  "v2_changelog": {
+    "version": "2.0.0",
+    "release_date": "2025-12-21",
+    "major_changes": [
+      "Map-based partitioning: World split at Main.spawnTileX into left (Red) and right (Blue) zones",
+      "Official Terraria housing validation using WorldGen.StartRoomCheck()",
+      "Comprehensive furniture detection: light sources, flat surfaces, comfort items",
+      "Background wall validation to ensure player-placed walls only",
+      "Spiral search algorithm for efficient house finding (150 tile radius)",
+      "Housing assignment persistence with JSON storage (tshock/teamnpc_housing.json)",
+      "Auto-save functionality every 5 minutes",
+      "House preservation on NPC death for respawning"
+    ],
+    "files_added": [
+      "HousingValidator.cs (388 lines) - Official housing validation",
+      "HousingPersistence.cs (195 lines) - JSON persistence system"
+    ],
+    "files_modified": [
+      "TeamState.cs (+110 lines) - Partition boundaries, spiral search, house tracking",
+      "Configuration.cs (+10 lines) - 6 new configuration options",
+      "TeamNPCPlugin.cs (+50 lines) - Component integration, persistence load/save",
+      "ArrivalConditionChecker.cs (+27 lines) - Auto-save, persistence triggers"
+    ],
+    "total_code_added": "~800 new lines + ~200 modified lines = ~1000 lines",
+    "build_status": "✅ Build succeeded - 0 warnings, 0 errors",
+    "deployment_status": "✅ Deployed to TShockLauncher/bin/Debug/net9.0/ServerPlugins/"
+  },
+
+  "furniture_detection": {
+    "light_sources": [
+      "TileID.Torches", "TileID.Candles", "TileID.Chandeliers",
+      "TileID.Lamps", "TileID.ChineseLanterns", "TileID.HangingLanterns",
+      "TileID.Candelabras", "TileID.WaterCandle", "TileID.PeaceCandle",
+      "TileID.Campfire", "TileID.Fireplace", "TileID.ChimneySmoke",
+      "TileID.Lampposts"
+    ],
+    "flat_surfaces": [
+      "TileID.Tables", "TileID.WorkBenches", "TileID.Dressers",
+      "TileID.Pianos", "TileID.Bookcases", "TileID.Bathtubs",
+      "TileID.AlchemyTable", "TileID.Tables2", "TileID.PicnicTable"
+    ],
+    "comfort_items": [
+      "TileID.Chairs", "TileID.Benches", "TileID.Beds",
+      "TileID.Thrones", "TileID.Toilets", "TileID.PicnicTable"
+    ],
+    "natural_walls": [
+      "WallID.Dirt", "WallID.Stone", "WallID.EbonstoneUnsafe",
+      "WallID.BlueDungeonUnsafe", "WallID.GreenDungeonUnsafe",
+      "WallID.PinkDungeonUnsafe", "WallID.CaveUnsafe",
+      "Cave2-8Unsafe", "WallID.SpiderUnsafe", "WallID.GrassUnsafe",
+      "WallID.JungleUnsafe", "WallID.FlowerUnsafe", "WallID.Grass",
+      "WallID.CorruptGrassUnsafe", "WallID.HallowedGrassUnsafe",
+      "WallID.CrimsonGrassUnsafe"
+    ]
+  },
+
+  "notes": [
+    "This plugin is completely independent from other TShock plugins",
+    "Uses Terraria's native team system (player.TPlayer.team)",
+    "Plugin manages ALL town NPC spawning - vanilla spawning is disabled",
+    "Each team needs to independently meet conditions for their NPCs",
+    "NPCs are tied to their team and cannot be moved by other teams",
+    "Housing must be built near the configured spawn centers",
+    "Conditions are checked every 10 seconds by default",
+    "NEW v2.0: Houses must meet official Terraria standards (furniture, walls, size)",
+    "NEW v2.0: NPCs will only search for houses within their partition boundary",
+    "NEW v2.0: Housing assignments persist across server restarts",
+    "NEW v2.0: Spiral search is more efficient than random search (v1.0)",
+    "Houses are validated on load - invalid houses are automatically cleared"
+  ]
+}

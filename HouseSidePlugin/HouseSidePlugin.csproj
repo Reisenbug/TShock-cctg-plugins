@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>HouseSidePlugin</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="TShockAPI">
+      <HintPath>../TeamNPCPlugin/lib/TShockAPI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="OTAPI">
+      <HintPath>../TeamNPCPlugin/lib/OTAPI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="TerrariaServer">
+      <HintPath>../TeamNPCPlugin/lib/TerrariaServer.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="ModFramework">
+      <HintPath>../TeamNPCPlugin/lib/ModFramework.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

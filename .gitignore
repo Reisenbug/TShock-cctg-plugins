@@ -1,0 +1,21 @@
+# Build outputs
+bin/
+obj/
+
+# TShock dependency DLLs
+lib/
+
+# macOS
+.DS_Store
+
+# IDE
+.vs/
+.idea/
+*.user
+*.suo
+
+# NuGet
+*.nupkg
+
+# Excluded plugins
+firstPlugin/
