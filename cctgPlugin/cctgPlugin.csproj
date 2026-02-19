@@ -22,5 +22,9 @@
       <HintPath>lib/ModFramework.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="WorldGenPlugin">
+      <HintPath>lib/WorldGenPlugin.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 </Project>

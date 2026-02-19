@@ -270,7 +270,8 @@ namespace cctgPlugin
                 if (above != null && above.liquid > 0)
                     continue;
 
-                return y;
+                if (HasClearSkyAbove(x, y))
+                    return y;
             }
 
             return -1;
@@ -320,7 +321,7 @@ namespace cctgPlugin
                     }
                 }
 
-                if (isRealGround)
+                if (isRealGround && HasClearSkyAbove(x, y))
                     return y;
             }
 
@@ -347,6 +348,22 @@ namespace cctgPlugin
                     if (tile != null && tile.liquid > 0)
                         return false;
                 }
+            }
+            return true;
+        }
+
+        private bool HasClearSkyAbove(int x, int groundY, int clearHeight = 100)
+        {
+            for (int dy = 1; dy <= clearHeight; dy++)
+            {
+                int checkY = groundY - dy;
+                if (!IsValidCoord(x, checkY))
+                    break;
+                var tile = Main.tile[x, checkY];
+                if (tile == null || !tile.active() || !Main.tileSolid[tile.type])
+                    continue;
+                // First solid block found — pass only if it's cloud
+                return tile.type == 189 || tile.type == 196;
             }
             return true;
         }

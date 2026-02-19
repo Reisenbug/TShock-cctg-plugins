@@ -87,6 +87,7 @@ namespace cctgPlugin
         private string _generatingFilename;
         private string _prevWorldPath;
         private const int WORLD_QUEUE_TARGET = 40;
+        private string _worldQueueFile => Path.Combine(TShock.SavePath, "cctg_world_queue.txt");
         private bool _cycleCancelled;
         private bool _confirmBroadcasted;
         private bool _confirmBroadcasted2;
@@ -195,7 +196,51 @@ namespace cctgPlugin
             // Initialize BiomeDetector after world is loaded
             biomeDetector = new BiomeDetector();
             TShock.Log.ConsoleInfo("[CCTG] Plugin loaded");
+            RestoreWorldQueue();
         }
+
+        private void RestoreWorldQueue()
+        {
+            try
+            {
+                if (!File.Exists(_worldQueueFile))
+                    return;
+
+                var lines = File.ReadAllLines(_worldQueueFile);
+                int restored = 0;
+                foreach (var line in lines)
+                {
+                    string filename = line.Trim();
+                    if (string.IsNullOrEmpty(filename))
+                        continue;
+                    string worldPath = Path.Combine(Main.WorldPath, filename + ".wld");
+                    if (File.Exists(worldPath) && new FileInfo(worldPath).Length > 0)
+                    {
+                        _worldQueue.Enqueue(filename);
+                        restored++;
+                    }
+                }
+                TShock.Log.ConsoleInfo($"[CCTG] Restored {restored} world(s) from queue file (of {lines.Length} entries)");
+                // Don't save here — let normal flow handle it
+            }
+            catch (Exception ex)
+            {
+                TShock.Log.ConsoleError($"[CCTG] RestoreWorldQueue failed: {ex.Message}");
+            }
+        }
+
+        private void SaveWorldQueue()
+        {
+            try
+            {
+                File.WriteAllLines(_worldQueueFile, _worldQueue);
+            }
+            catch (Exception ex)
+            {
+                TShock.Log.ConsoleError($"[CCTG] SaveWorldQueue failed: {ex.Message}");
+            }
+        }
+
 
         // Command: Manually trigger world painting
         private void PaintWorldCommand(CommandArgs args)
@@ -473,14 +518,16 @@ namespace cctgPlugin
             _confirmBroadcasted2 = false;
             _cycleStateTime = DateTime.Now;
 
+            TShock.Log.ConsoleInfo($"[CCTG][DEBUG] EndGame: queue={_worldQueue.Count}, cycleState={_cycleState}, generatingFilename={_generatingFilename}");
             if (_worldQueue.Count > 0)
             {
                 _cycleState = CycleState.WaitingConfirm;
                 TShock.Log.ConsoleInfo($"[CCTG] World ready (queue={_worldQueue.Count}), starting countdown...");
             }
-            else if (_cycleState == CycleState.Generating)
+            else if (_cycleState == CycleState.Generating || WorldGenPlugin.WorldGenPlugin.Instance?.IsGenerating == true)
             {
-                TShock.Log.ConsoleInfo($"[CCTG] Queue empty, still generating {_generatingFilename}, will auto-proceed when ready...");
+                _cycleState = CycleState.Generating;
+                TShock.Log.ConsoleInfo($"[CCTG] Queue empty, still generating, will auto-proceed when ready...");
             }
             else
             {
@@ -498,6 +545,13 @@ namespace cctgPlugin
                 return;
             if (_worldQueue.Count >= WORLD_QUEUE_TARGET)
                 return;
+            if (WorldGenPlugin.WorldGenPlugin.Instance?.IsGenerating == true)
+            {
+                _cycleState = CycleState.Generating;
+                _cycleStateTime = DateTime.Now;
+                TShock.Log.ConsoleInfo("[CCTG] WorldGen is already running, waiting for it to complete...");
+                return;
+            }
             _generatingFilename = Guid.NewGuid().ToString("N").Substring(0, 8);
             Commands.HandleCommand(TSPlayer.Server, $"/genworld {_generatingFilename} medium");
             _cycleState = CycleState.Generating;
@@ -1947,7 +2001,17 @@ namespace cctgPlugin
             }
 
             // Auto-cycle state machine
-            if (_cycleState == CycleState.Generating)
+            if (_cycleState == CycleState.Generating && string.IsNullOrEmpty(_generatingFilename))
+            {
+                // _generatingFilename unknown (IsGenerating was true at start) — wait for it to finish
+                if (WorldGenPlugin.WorldGenPlugin.Instance?.IsGenerating != true)
+                {
+                    TShock.Log.ConsoleInfo("[CCTG] External generation finished, resuming...");
+                    _cycleState = CycleState.Idle;
+                    TryStartNextGeneration();
+                }
+            }
+            else if (_cycleState == CycleState.Generating && !string.IsNullOrEmpty(_generatingFilename))
             {
                 string worldPath = Path.Combine(Main.WorldPath, _generatingFilename + ".wld");
                 if (File.Exists(worldPath) && new FileInfo(worldPath).Length > 0)
@@ -1955,27 +2019,41 @@ namespace cctgPlugin
                     _worldQueue.Enqueue(_generatingFilename);
                     TShock.Log.ConsoleInfo($"[CCTG] World {_generatingFilename} ready, queue={_worldQueue.Count}");
                     _generatingFilename = null;
+                    SaveWorldQueue();
 
-                    if (!gameStarted && _worldQueue.Count >= 1)
+                    if (!gameStarted)
                     {
                         _cycleState = CycleState.WaitingConfirm;
+                        _cycleStateTime = DateTime.Now;
+                        _confirmBroadcasted = false;
+                        _confirmBroadcasted2 = false;
                         TShock.Log.ConsoleInfo("[CCTG] Game ended and world ready, starting countdown...");
                     }
                     else
                     {
                         _cycleState = CycleState.Idle;
                     }
-
+                    TryStartNextGeneration();
+                }
+                else if ((DateTime.Now - _cycleStateTime).TotalSeconds > 30)
+                {
+                    TShock.Log.ConsoleInfo($"[CCTG] No file for {_generatingFilename} after 30s, retrying...");
+                    _generatingFilename = null;
+                    _cycleState = CycleState.Idle;
                     TryStartNextGeneration();
                 }
                 else if ((DateTime.Now - _cycleStateTime).TotalMinutes > 10)
                 {
-                    TShock.Log.ConsoleError("[CCTG] Auto-cycle generation timed out. Killing and retrying...");
+                    TShock.Log.ConsoleError("[CCTG] Generation timed out. Killing and retrying...");
                     Commands.HandleCommand(TSPlayer.Server, "/killgenworld");
                     _generatingFilename = null;
                     _cycleState = CycleState.Idle;
                     TryStartNextGeneration();
                 }
+            }
+            else if (_cycleState == CycleState.Idle)
+            {
+                TryStartNextGeneration();
             }
             else if (_cycleState == CycleState.WaitingConfirm)
             {
@@ -1992,6 +2070,7 @@ namespace cctgPlugin
                 }
                 if (elapsed >= 10)
                 {
+                    TShock.Log.ConsoleInfo($"[CCTG][DEBUG] WaitingConfirm elapsed 10s: cancelled={_cycleCancelled}, queue={_worldQueue.Count}");
                     if (_cycleCancelled)
                     {
                         _cycleState = CycleState.Idle;
@@ -2015,6 +2094,7 @@ namespace cctgPlugin
                         }
                         else
                         {
+                            TShock.Log.ConsoleInfo($"[CCTG][DEBUG] Transitioning to Swapping, queue={_worldQueue.Count}");
                             _cycleState = CycleState.Swapping;
                         }
                     }
@@ -2034,6 +2114,7 @@ namespace cctgPlugin
 
                 _prevWorldPath = Main.worldPathName;
                 string nextFilename = _worldQueue.Dequeue();
+                SaveWorldQueue();
                 string worldPath = Path.Combine(Main.WorldPath, nextFilename + ".wld");
                 TShock.Log.ConsoleInfo($"[CCTG] Swapping to world: {worldPath} (queue remaining={_worldQueue.Count})");
                 Commands.HandleCommand(TSPlayer.Server, $"/swapworld {worldPath}");
@@ -2047,11 +2128,14 @@ namespace cctgPlugin
                     _cycleState = CycleState.Idle;
 
                     // Delete previous world files
+                    TShock.Log.ConsoleInfo($"[CCTG] StartPending: prevWorldPath={_prevWorldPath ?? "(null)"}");
                     if (!string.IsNullOrEmpty(_prevWorldPath))
                     {
                         try
                         {
-                            if (File.Exists(_prevWorldPath))
+                            bool wldExists = File.Exists(_prevWorldPath);
+                            TShock.Log.ConsoleInfo($"[CCTG] Attempting delete: {_prevWorldPath} (exists={wldExists})");
+                            if (wldExists)
                                 File.Delete(_prevWorldPath);
                             string twldPath = Path.ChangeExtension(_prevWorldPath, ".twld");
                             if (File.Exists(twldPath))
@@ -2088,7 +2172,11 @@ namespace cctgPlugin
                     foreach (var player in TShock.Players)
                     {
                         if (player != null && player.ConnectionAlive)
+                        {
                             player.Teleport(Main.spawnTileX * 16f, Main.spawnTileY * 16f);
+                            NetMessage.SendData((int)PacketTypes.WorldInfo, player.Index);
+                            RemoteClient.CheckSection(player.Index, new Microsoft.Xna.Framework.Vector2(Main.spawnTileX * 16f, Main.spawnTileY * 16f), 1);
+                        }
                     }
 
                     TShock.Log.ConsoleInfo("[CCTG] Auto-starting next round...");

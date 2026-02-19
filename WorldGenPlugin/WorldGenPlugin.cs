@@ -20,8 +20,12 @@ namespace WorldGenPlugin
         private Process _currentProcess;
         private string _currentExpectedPath;
 
+        public static WorldGenPlugin Instance { get; private set; }
+        public bool IsGenerating => _generating;
+
         public WorldGenPlugin(Main game) : base(game)
         {
+            Instance = this;
         }
 
         public override void Initialize()
@@ -167,6 +171,7 @@ namespace WorldGenPlugin
         {
             string inputFile = null;
             Process process = null;
+            bool worldCreated = false;
 
             try
             {
@@ -250,7 +255,6 @@ namespace WorldGenPlugin
 
                 int maxWait = 600;
                 int waited = 0;
-                bool worldCreated = false;
                 string foundPath = null;
 
                 while (waited < maxWait)

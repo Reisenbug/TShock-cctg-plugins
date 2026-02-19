@@ -148,7 +148,7 @@ namespace cctgPlugin
                         }
                     }
 
-                    if (isRealGround)
+                    if (isRealGround && HasClearSkyAbove(x, y))
                     {
                         surfaceY = y;
                         break;
@@ -193,7 +193,7 @@ namespace cctgPlugin
 
                     totalChecked++;
                     var tile = Main.tile[x, y];
-                    if (tile == null || !tile.active() || !Main.tileSolid[tile.type])
+                    if (tile == null || !tile.active() || !Main.tileSolid[tile.type] || tile.type == 189 || tile.type == 196)
                     {
                         clearCount++;
                     }
@@ -346,6 +346,21 @@ namespace cctgPlugin
         /// <summary>
         /// Check if coordinates are within world bounds
         /// </summary>
+        private bool HasClearSkyAbove(int x, int groundY, int clearHeight = 100)
+        {
+            for (int dy = 1; dy <= clearHeight; dy++)
+            {
+                int checkY = groundY - dy;
+                if (!IsValidCoord(x, checkY))
+                    break;
+                var tile = Main.tile[x, checkY];
+                if (tile == null || !tile.active() || !Main.tileSolid[tile.type])
+                    continue;
+                return tile.type == 189 || tile.type == 196;
+            }
+            return true;
+        }
+
         private bool IsValidCoord(int x, int y)
         {
             return x >= 0 && x < Main.maxTilesX && y >= 0 && y < Main.maxTilesY;
