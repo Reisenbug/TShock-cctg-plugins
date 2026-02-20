@@ -191,6 +191,7 @@ namespace TeamNPCPlugin
         {
             int boundary = Main.spawnTileX;
 
+            // Registered NPCs: kick if home crossed boundary
             foreach (var npcIndex in npcManager.GetAllRegisteredNPCs().ToList())
             {
                 if (npcIndex < 0 || npcIndex >= Main.maxNPCs || !Main.npc[npcIndex].active)
@@ -209,12 +210,53 @@ namespace TeamNPCPlugin
 
                 if (outOfBounds)
                 {
-                    Point housePos = teamStates[team].SpawnCenter;
-                    npc.homeTileX = housePos.X;
-                    npc.homeTileY = housePos.Y;
-                    TSPlayer.All.SendData(PacketTypes.UpdateNPCHome, "", npcIndex,
-                        npc.homeTileX, npc.homeTileY, 0);
-                    TShock.Log.ConsoleInfo($"[TeamNPC] {team} {npc.TypeName} home was out of bounds, reset to ({housePos.X},{housePos.Y})");
+                    npc.homeless = true;
+                    TSPlayer.All.SendData(PacketTypes.NpcUpdate, "", npcIndex);
+                    TShock.Log.ConsoleInfo($"[TeamNPC] {team} {npc.TypeName} home out of bounds, kicked homeless");
+                }
+            }
+
+            // All town NPCs: if a non-registered NPC self-assigned to wrong side, kick it
+            Point redSpawn = teamStates["Red"].SpawnCenter;
+            Point blueSpawn = teamStates["Blue"].SpawnCenter;
+            if (redSpawn.X > 0 && blueSpawn.X > 0)
+            {
+                for (int i = 0; i < Main.maxNPCs; i++)
+                {
+                    NPC npc = Main.npc[i];
+                    if (npc == null || !npc.active || !npc.townNPC || npc.homeless)
+                        continue;
+
+                    // Red side: homeTileX should be < boundary
+                    // Blue side: homeTileX should be > boundary
+                    // If home is on red side (< boundary), it belongs to red; if on blue side (> boundary), to blue
+                    bool homeOnRedSide = npc.homeTileX < boundary;
+                    bool homeOnBlueSide = npc.homeTileX > boundary;
+
+                    string npcTeam = npcManager.GetNPCTeam(i);
+
+                    if (npcTeam == "Red" && !homeOnRedSide)
+                    {
+                        npc.homeless = true;
+                        TSPlayer.All.SendData(PacketTypes.NpcUpdate, "", i);
+                        TShock.Log.ConsoleInfo($"[TeamNPC] Red {npc.TypeName} self-assigned to blue side, kicked");
+                    }
+                    else if (npcTeam == "Blue" && !homeOnBlueSide)
+                    {
+                        npc.homeless = true;
+                        TSPlayer.All.SendData(PacketTypes.NpcUpdate, "", i);
+                        TShock.Log.ConsoleInfo($"[TeamNPC] Blue {npc.TypeName} self-assigned to red side, kicked");
+                    }
+                    else if (npcTeam == null)
+                    {
+                        // Unregistered NPC: kick if it squatted on either team's side
+                        if (homeOnRedSide || homeOnBlueSide)
+                        {
+                            npc.homeless = true;
+                            TSPlayer.All.SendData(PacketTypes.NpcUpdate, "", i);
+                            TShock.Log.ConsoleInfo($"[TeamNPC] Unregistered {npc.TypeName} self-assigned to team side, kicked");
+                        }
+                    }
                 }
             }
 

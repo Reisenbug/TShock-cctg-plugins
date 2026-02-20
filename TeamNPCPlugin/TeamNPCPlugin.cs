@@ -374,11 +374,30 @@ namespace TeamNPCPlugin
             if (args.HouseholdStatus == GetDataHandlers.HouseholdStatus.Homeless)
             {
                 conditionChecker.RemovePlayerLockedHome(args.ID);
+                return;
             }
-            else
+
+            // Determine player team
+            int playerTeam = args.Player?.TPlayer?.team ?? 0;
+            string playerTeamName = playerTeam == 1 ? "Red" : playerTeam == 3 ? "Blue" : null;
+
+            // Determine NPC team
+            string npcTeamName = npcTeamManager.GetNPCTeam(args.ID);
+
+            if (playerTeamName != null && npcTeamName != null && npcTeamName != playerTeamName)
             {
-                conditionChecker.SetPlayerLockedHome(args.ID, new Point(args.X, args.Y));
+                // Player is assigning an enemy NPC — kick it out
+                if (args.ID >= 0 && args.ID < Main.maxNPCs && Main.npc[args.ID].active)
+                {
+                    Main.npc[args.ID].homeless = true;
+                    TSPlayer.All.SendData(PacketTypes.NpcUpdate, "", args.ID);
+                    TShock.Log.ConsoleInfo($"[TeamNPC] {args.Player.Name} tried to assign enemy {Main.npc[args.ID].TypeName}, kicked out");
+                }
+                args.Handled = true;
+                return;
             }
+
+            conditionChecker.SetPlayerLockedHome(args.ID, new Point(args.X, args.Y));
         }
 
     }

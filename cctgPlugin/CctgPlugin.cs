@@ -203,25 +203,48 @@ namespace cctgPlugin
         {
             try
             {
-                if (!File.Exists(_worldQueueFile))
-                    return;
+                string worldDir = Main.WorldPath;
+                string currentWorld = Main.worldPathName ?? "";
+                var hexPattern = new System.Text.RegularExpressions.Regex(@"^[0-9a-f]{8}$");
 
-                var lines = File.ReadAllLines(_worldQueueFile);
-                int restored = 0;
-                foreach (var line in lines)
+                // Step 1: restore from queue file (preserves order)
+                var ordered = new List<string>();
+                if (File.Exists(_worldQueueFile))
                 {
-                    string filename = line.Trim();
-                    if (string.IsNullOrEmpty(filename))
-                        continue;
-                    string worldPath = Path.Combine(Main.WorldPath, filename + ".wld");
-                    if (File.Exists(worldPath) && new FileInfo(worldPath).Length > 0)
+                    foreach (var line in File.ReadAllLines(_worldQueueFile))
                     {
-                        _worldQueue.Enqueue(filename);
-                        restored++;
+                        string filename = line.Trim();
+                        if (string.IsNullOrEmpty(filename)) continue;
+                        string wldPath = Path.Combine(worldDir, filename + ".wld");
+                        if (File.Exists(wldPath) && new FileInfo(wldPath).Length > 0)
+                            ordered.Add(filename);
                     }
                 }
-                TShock.Log.ConsoleInfo($"[CCTG] Restored {restored} world(s) from queue file (of {lines.Length} entries)");
-                // Don't save here — let normal flow handle it
+
+                // Step 2: scan disk for any generated worlds not in the queue file
+                if (Directory.Exists(worldDir))
+                {
+                    var inQueue = new HashSet<string>(ordered, StringComparer.OrdinalIgnoreCase);
+                    foreach (var file in Directory.GetFiles(worldDir, "*.wld"))
+                    {
+                        string name = Path.GetFileNameWithoutExtension(file);
+                        if (!hexPattern.IsMatch(name)) continue;
+                        if (string.Equals(file, currentWorld, StringComparison.OrdinalIgnoreCase)) continue;
+                        if (inQueue.Contains(name)) continue;
+                        if (new FileInfo(file).Length > 0)
+                        {
+                            ordered.Add(name);
+                            inQueue.Add(name);
+                        }
+                    }
+                }
+
+                foreach (var f in ordered)
+                    _worldQueue.Enqueue(f);
+
+                TShock.Log.ConsoleInfo($"[CCTG] Restored {_worldQueue.Count} world(s) into queue");
+                if (_worldQueue.Count > 0)
+                    SaveWorldQueue();
             }
             catch (Exception ex)
             {
@@ -2571,17 +2594,7 @@ namespace cctgPlugin
                         continue;
                     }
 
-                    // Check if carrier still has the gem item in inventory (slots 0-49)
-                    bool carrierHasGem = false;
-                    for (int slot = 0; slot < 50; slot++)
-                    {
-                        var item = carrier.TPlayer.inventory[slot];
-                        if (item != null && !item.IsAir && item.type == gemItemId)
-                        {
-                            carrierHasGem = true;
-                            break;
-                        }
-                    }
+                    bool carrierHasGem = PlayerHasGemItem(carrier.TPlayer, gemItemId);
 
                     if (!carrierHasGem)
                     {
@@ -2651,18 +2664,7 @@ namespace cctgPlugin
                         carrier.SendMessage(dropReason, 255, 255, 0);
                         TShock.Log.ConsoleInfo($"[CCTG] {carrier.Name} forced gem drop: {dropReason}");
 
-                        // Remove gem from carrier inventory
-                        for (int slot = 0; slot < 50; slot++)
-                        {
-                            var item = carrier.TPlayer.inventory[slot];
-                            if (item != null && !item.IsAir && item.type == gemItemId)
-                            {
-                                carrier.TPlayer.inventory[slot].SetDefaults(0);
-                                carrier.SendData(PacketTypes.PlayerSlot, "", carrier.Index, slot);
-                                break;
-                            }
-                        }
-
+                        RemoveGemItemFromPlayer(carrier, gemItemId);
                         TSPlayer.All.SendMessage($"{gemTeamName} gem has returned to the base!", msgR, msgG, msgB);
                         ReturnGem(i, state);
                         continue;
@@ -2700,16 +2702,7 @@ namespace cctgPlugin
                     if (inOwnHouse)
                     {
                         // Victory! Remove gem from carrier inventory
-                        for (int slot = 0; slot < 50; slot++)
-                        {
-                            var item = carrier.TPlayer.inventory[slot];
-                            if (item != null && !item.IsAir && item.type == gemItemId)
-                            {
-                                carrier.TPlayer.inventory[slot].SetDefaults(0);
-                                carrier.SendData(PacketTypes.PlayerSlot, "", carrier.Index, slot);
-                                break;
-                            }
-                        }
+                        RemoveGemItemFromPlayer(carrier, gemItemId);
 
                         string winTeamName = carrierTeam == 1 ? "Red" : "Blue";
                         TSPlayer.All.SendMessage($"{winTeamName} team won the game!", msgR, msgG, msgB);
@@ -2750,23 +2743,10 @@ namespace cctgPlugin
                         if (player.TPlayer.team != ownerTeam)
                             continue;
 
-                        // Check if this player has the gem in inventory
-                        bool playerHasGem = false;
-                        for (int slot = 0; slot < 50; slot++)
-                        {
-                            var item = player.TPlayer.inventory[slot];
-                            if (item != null && !item.IsAir && item.type == gemItemId)
-                            {
-                                playerHasGem = true;
-                                // Remove the gem from their inventory
-                                player.TPlayer.inventory[slot].SetDefaults(0);
-                                player.SendData(PacketTypes.PlayerSlot, "", player.Index, slot);
-                                break;
-                            }
-                        }
-
+                        bool playerHasGem = PlayerHasGemItem(player.TPlayer, gemItemId);
                         if (playerHasGem)
                         {
+                            RemoveGemItemFromPlayer(player, gemItemId);
                             // Same team picked up — return to base silently (no "picked up" message)
                             TSPlayer.All.SendMessage($"{gemTeamName} gem has returned to the base!", msgR, msgG, msgB);
                             TShock.Log.ConsoleInfo($"[CCTG] {gemTeamName} gem returned by {player.Name}");
@@ -2788,18 +2768,7 @@ namespace cctgPlugin
                         if (player.TPlayer.team != opposingTeam)
                             continue;
 
-                        bool playerHasGem = false;
-                        for (int slot = 0; slot < 50; slot++)
-                        {
-                            var item = player.TPlayer.inventory[slot];
-                            if (item != null && !item.IsAir && item.type == gemItemId)
-                            {
-                                playerHasGem = true;
-                                break;
-                            }
-                        }
-
-                        if (playerHasGem)
+                        if (PlayerHasGemItem(player.TPlayer, gemItemId))
                         {
                             // Opposing player picked up the dropped gem — broadcast pickup
                             state.CarrierPlayerIndex = player.Index;
@@ -2840,6 +2809,40 @@ namespace cctgPlugin
         }
 
         // Reset gem state back to "not picked up" and reactivate gem lock visual
+        private bool PlayerHasGemItem(Terraria.Player tplayer, int gemItemId)
+        {
+            for (int slot = 0; slot < 50; slot++)
+            {
+                var item = tplayer.inventory[slot];
+                if (item != null && !item.IsAir && item.type == gemItemId)
+                    return true;
+            }
+            // slot 58 = mouseItem (dragged with cursor)
+            var mouse = tplayer.inventory[58];
+            return mouse != null && !mouse.IsAir && mouse.type == gemItemId;
+        }
+
+        private void RemoveGemItemFromPlayer(TSPlayer player, int gemItemId)
+        {
+            for (int slot = 0; slot < 50; slot++)
+            {
+                var item = player.TPlayer.inventory[slot];
+                if (item != null && !item.IsAir && item.type == gemItemId)
+                {
+                    player.TPlayer.inventory[slot].SetDefaults(0);
+                    player.SendData(PacketTypes.PlayerSlot, "", player.Index, slot);
+                    return;
+                }
+            }
+            // slot 58 = mouseItem
+            var mouse = player.TPlayer.inventory[58];
+            if (mouse != null && !mouse.IsAir && mouse.type == gemItemId)
+            {
+                player.TPlayer.inventory[58].SetDefaults(0);
+                player.SendData(PacketTypes.PlayerSlot, "", player.Index, 58);
+            }
+        }
+
         private void ReturnGem(int gemLockIndex, GemPickupState state)
         {
             state.Completed = false;
@@ -2871,17 +2874,7 @@ namespace cctgPlugin
                 int gemItemId = info.Style == 0 ? 1526 : 1524;
                 string gemTeamName = info.Style == 0 ? "Red" : "Blue";
 
-                // Remove gem from player inventory
-                for (int slot = 0; slot < 50; slot++)
-                {
-                    var item = player.TPlayer.inventory[slot];
-                    if (item != null && !item.IsAir && item.type == gemItemId)
-                    {
-                        player.TPlayer.inventory[slot].SetDefaults(0);
-                        player.SendData(PacketTypes.PlayerSlot, "", player.Index, slot);
-                        break;
-                    }
-                }
+                RemoveGemItemFromPlayer(player, gemItemId);
 
                 player.SendMessage("Gem returned to base because of teleporting!", 255, 255, 0);
                 TSPlayer.All.SendMessage($"{gemTeamName} gem has returned to the base!", 255, 105, 180);
