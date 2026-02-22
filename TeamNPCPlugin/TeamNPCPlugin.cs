@@ -381,23 +381,47 @@ namespace TeamNPCPlugin
             int playerTeam = args.Player?.TPlayer?.team ?? 0;
             string playerTeamName = playerTeam == 1 ? "Red" : playerTeam == 3 ? "Blue" : null;
 
-            // Determine NPC team
-            string npcTeamName = npcTeamManager.GetNPCTeam(args.ID);
+            int npcIndex = args.ID;
 
-            if (playerTeamName != null && npcTeamName != null && npcTeamName != playerTeamName)
+            if (playerTeamName != null)
             {
-                // Player is assigning an enemy NPC — kick it out
-                if (args.ID >= 0 && args.ID < Main.maxNPCs && Main.npc[args.ID].active)
+                string npcTeamName = npcTeamManager.GetNPCTeam(args.ID);
+
+                if (npcTeamName != null && npcTeamName != playerTeamName)
                 {
-                    Main.npc[args.ID].homeless = true;
-                    TSPlayer.All.SendData(PacketTypes.NpcUpdate, "", args.ID);
-                    TShock.Log.ConsoleInfo($"[TeamNPC] {args.Player.Name} tried to assign enemy {Main.npc[args.ID].TypeName}, kicked out");
+                    // Player assigned an enemy NPC — find own team's NPC of the same type
+                    int enemyType = args.ID >= 0 && args.ID < Main.maxNPCs ? Main.npc[args.ID].type : -1;
+                    int ownIndex = -1;
+                    if (enemyType >= 0)
+                    {
+                        foreach (var idx in npcTeamManager.GetAllRegisteredNPCs())
+                        {
+                            if (npcTeamManager.GetNPCTeam(idx) == playerTeamName &&
+                                idx < Main.maxNPCs && Main.npc[idx].active &&
+                                Main.npc[idx].type == enemyType)
+                            {
+                                ownIndex = idx;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (ownIndex >= 0)
+                    {
+                        npcIndex = ownIndex;
+                        TShock.Log.ConsoleInfo($"[TeamNPC] {args.Player.Name} assigned enemy {Main.npc[args.ID].TypeName}, redirected to own team's (idx={ownIndex})");
+                    }
+                    else
+                    {
+                        // No own-team NPC of this type exists — block
+                        args.Handled = true;
+                        TShock.Log.ConsoleInfo($"[TeamNPC] {args.Player.Name} assigned enemy {Main.npc[args.ID].TypeName}, no own-team equivalent found, blocked");
+                        return;
+                    }
                 }
-                args.Handled = true;
-                return;
             }
 
-            conditionChecker.SetPlayerLockedHome(args.ID, new Point(args.X, args.Y));
+            conditionChecker.SetPlayerLockedHome(npcIndex, new Point(args.X, args.Y));
         }
 
     }

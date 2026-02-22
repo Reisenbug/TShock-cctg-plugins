@@ -247,16 +247,7 @@ namespace TeamNPCPlugin
                         TSPlayer.All.SendData(PacketTypes.NpcUpdate, "", i);
                         TShock.Log.ConsoleInfo($"[TeamNPC] Blue {npc.TypeName} self-assigned to red side, kicked");
                     }
-                    else if (npcTeam == null)
-                    {
-                        // Unregistered NPC: kick if it squatted on either team's side
-                        if (homeOnRedSide || homeOnBlueSide)
-                        {
-                            npc.homeless = true;
-                            TSPlayer.All.SendData(PacketTypes.NpcUpdate, "", i);
-                            TShock.Log.ConsoleInfo($"[TeamNPC] Unregistered {npc.TypeName} self-assigned to team side, kicked");
-                        }
-                    }
+                    // Unregistered NPCs are not managed
                 }
             }
 
