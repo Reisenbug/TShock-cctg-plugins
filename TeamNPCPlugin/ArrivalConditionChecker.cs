@@ -13,6 +13,8 @@ namespace TeamNPCPlugin
         private int blueTickCounter = 0;
         private int redCheckInterval;
         private int blueCheckInterval;
+        private int homelessCheckCounter = 0;
+        private const int HOMELESS_CHECK_INTERVAL = 30 * 60; // 30s at 60 ticks/s
         private Random random = new Random();
 
         private NPCTeamManager npcManager;
@@ -51,6 +53,13 @@ namespace TeamNPCPlugin
                 blueTickCounter = 0;
                 blueCheckInterval = random.Next(25, 61) * 60;
                 blueReady = true;
+            }
+
+            homelessCheckCounter++;
+            if (homelessCheckCounter >= HOMELESS_CHECK_INTERVAL)
+            {
+                homelessCheckCounter = 0;
+                RestoreHomelessNPCs();
             }
 
             if (!redReady && !blueReady)
@@ -139,6 +148,16 @@ namespace TeamNPCPlugin
                     npcManager.RegisterNPC(npcIndex, rule.Key, teamName, rule.NpcType);
                     SendArrivalMessage(rule.DisplayName, teamName, team.TeamId);
                     TShock.Log.ConsoleInfo($"[TeamNPC] {teamName}: {rule.DisplayName} arrived at ({spawnLocation.X}, {spawnLocation.Y})");
+
+                    // Assign a fixed home near spawn so NPC doesn't wander
+                    Point home = FindHomeNearSpawn(spawnLocation, teamName);
+                    if (home != Point.Zero)
+                    {
+                        spawnController.SetNPCHome(npcIndex, home);
+                        SetPlayerLockedHome(npcIndex, home);
+                        TShock.Log.ConsoleInfo($"[TeamNPC] {teamName}: {rule.DisplayName} assigned home at ({home.X}, {home.Y})");
+                    }
+
                     break;
                 }
             }
@@ -297,6 +316,85 @@ namespace TeamNPCPlugin
                     }
                 }
             }
+        }
+
+        private void RestoreHomelessNPCs()
+        {
+            foreach (var kvp in playerLockedHomes.ToList())
+            {
+                int npcIndex = kvp.Key;
+                Point home = kvp.Value;
+
+                if (npcIndex < 0 || npcIndex >= Main.maxNPCs || !Main.npc[npcIndex].active)
+                    continue;
+
+                NPC npc = Main.npc[npcIndex];
+                if (npc.homeless)
+                {
+                    npc.homeTileX = home.X;
+                    npc.homeTileY = home.Y;
+                    npc.homeless = false;
+                    TSPlayer.All.SendData(PacketTypes.UpdateNPCHome, "", npcIndex, home.X, home.Y, 0);
+                    TShock.Log.ConsoleInfo($"[TeamNPC] Restored homeless {npc.TypeName} home to ({home.X},{home.Y})");
+                }
+            }
+        }
+
+        private Point FindHomeNearSpawn(Point spawnCenter, string teamName)
+        {
+            // Candidates: 10~100 tiles to the left AND right of house spawn center
+            var candidates = new List<int>();
+            for (int dx = 10; dx <= 100; dx++)
+            {
+                candidates.Add(spawnCenter.X - dx);
+                candidates.Add(spawnCenter.X + dx);
+            }
+
+            // Shuffle for randomness
+            for (int i = candidates.Count - 1; i > 0; i--)
+            {
+                int j = random.Next(i + 1);
+                int tmp = candidates[i]; candidates[i] = candidates[j]; candidates[j] = tmp;
+            }
+
+            foreach (int x in candidates)
+            {
+                if (x < 10 || x >= Main.maxTilesX - 10) continue;
+
+                // Find surface tile at this X (scan downward from sky)
+                int surfaceY = -1;
+                for (int y = 50; y < Main.maxTilesY - 50; y++)
+                {
+                    var tile = Main.tile[x, y];
+                    if (tile != null && tile.active() && Main.tileSolid[tile.type])
+                    {
+                        surfaceY = y;
+                        break;
+                    }
+                }
+
+                if (surfaceY < 0) continue;
+
+                // Home tile = 3 blocks above surface
+                int homeY = surfaceY - 3;
+                if (homeY < 10) continue;
+
+                // Make sure this home position isn't already taken by another NPC
+                bool occupied = false;
+                foreach (var locked in playerLockedHomes.Values)
+                {
+                    if (Math.Abs(locked.X - x) < 5 && Math.Abs(locked.Y - homeY) < 5)
+                    {
+                        occupied = true;
+                        break;
+                    }
+                }
+                if (occupied) continue;
+
+                return new Point(x, homeY);
+            }
+
+            return Point.Zero;
         }
     }
 }

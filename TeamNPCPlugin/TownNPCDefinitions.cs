@@ -60,7 +60,7 @@ namespace TeamNPCPlugin
             new SpawnRule
             {
                 Key = "WitchDoctor", NpcType = NPCID.WitchDoctor, DisplayName = "Witch Doctor",
-                Condition = team => NPC.downedQueenBee
+                Condition = team => NPC.downedQueenBee && !team.PlayerInSnow
             },
             new SpawnRule
             {
@@ -70,7 +70,7 @@ namespace TeamNPCPlugin
             new SpawnRule
             {
                 Key = "Mechanic", NpcType = NPCID.Mechanic, DisplayName = "Mechanic",
-                Condition = team => NPC.savedMech
+                Condition = team => NPC.savedMech && !team.PlayerInJungle
             },
             new SpawnRule
             {
@@ -125,7 +125,7 @@ namespace TeamNPCPlugin
             new SpawnRule
             {
                 Key = "Truffle", NpcType = NPCID.Truffle, DisplayName = "Truffle",
-                Condition = team => Main.hardMode
+                Condition = team => false
             },
             // Zoologist disabled
             new SpawnRule
