@@ -2029,6 +2029,26 @@ namespace cctgPlugin
                 if (WorldGenPlugin.WorldGenPlugin.Instance?.IsGenerating != true)
                 {
                     TShock.Log.ConsoleInfo("[CCTG] External generation finished, resuming...");
+                    // Scan worlds dir for newly generated worlds not yet in queue
+                    try
+                    {
+                        foreach (var f in Directory.GetFiles(Main.WorldPath, "*.wld"))
+                        {
+                            string name = Path.GetFileNameWithoutExtension(f);
+                            if (name.Length == 8 && System.Text.RegularExpressions.Regex.IsMatch(name, "^[0-9a-f]{8}$")
+                                && !_worldQueue.Contains(name)
+                                && f != Main.worldPathName)
+                            {
+                                _worldQueue.Enqueue(name);
+                                TShock.Log.ConsoleInfo($"[CCTG] Recovered world {name} into queue");
+                            }
+                        }
+                        SaveWorldQueue();
+                    }
+                    catch (Exception ex)
+                    {
+                        TShock.Log.ConsoleError($"[CCTG] Failed to scan worlds: {ex.Message}");
+                    }
                     _cycleState = CycleState.Idle;
                     TryStartNextGeneration();
                 }
@@ -2057,17 +2077,17 @@ namespace cctgPlugin
                     }
                     TryStartNextGeneration();
                 }
-                else if ((DateTime.Now - _cycleStateTime).TotalSeconds > 30)
-                {
-                    TShock.Log.ConsoleInfo($"[CCTG] No file for {_generatingFilename} after 30s, retrying...");
-                    _generatingFilename = null;
-                    _cycleState = CycleState.Idle;
-                    TryStartNextGeneration();
-                }
                 else if ((DateTime.Now - _cycleStateTime).TotalMinutes > 10)
                 {
                     TShock.Log.ConsoleError("[CCTG] Generation timed out. Killing and retrying...");
                     Commands.HandleCommand(TSPlayer.Server, "/killgenworld");
+                    _generatingFilename = null;
+                    _cycleState = CycleState.Idle;
+                    TryStartNextGeneration();
+                }
+                else if (WorldGenPlugin.WorldGenPlugin.Instance?.IsGenerating != true)
+                {
+                    TShock.Log.ConsoleInfo($"[CCTG] WorldGen finished but file not found for {_generatingFilename}, retrying...");
                     _generatingFilename = null;
                     _cycleState = CycleState.Idle;
                     TryStartNextGeneration();
