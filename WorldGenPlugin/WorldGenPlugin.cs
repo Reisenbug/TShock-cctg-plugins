@@ -204,12 +204,12 @@ namespace WorldGenPlugin
                 if (serverExe.StartsWith("dotnet:"))
                 {
                     startInfo.FileName = "dotnet";
-                    startInfo.Arguments = $"{serverExe.Substring(7)} -worldselectpath \"{worldDir}\"";
+                    startInfo.Arguments = $"{serverExe.Substring(7)} -worldselectpath \"{worldDir}\" -rest-enabled false";
                 }
                 else
                 {
                     startInfo.FileName = serverExe;
-                    startInfo.Arguments = $"-worldselectpath \"{worldDir}\"";
+                    startInfo.Arguments = $"-worldselectpath \"{worldDir}\" -rest-enabled false";
                 }
 
                 process = Process.Start(startInfo);
