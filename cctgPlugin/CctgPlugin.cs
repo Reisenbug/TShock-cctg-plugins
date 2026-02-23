@@ -1371,9 +1371,8 @@ namespace cctgPlugin
             if (gemLockIdx >= 0)
             {
                 e.Handled = true;
-                // Send the full gem lock area (3x3 + margin) to restore multi-tile correctly
                 var glInfo = houseBuilder.GemLockInfos[gemLockIdx];
-                e.Player.SendTileRect((short)(glInfo.WallLeft - 1), (short)(glInfo.WallTop - 1), 5, 5);
+                e.Player.SendTileRect((short)(glInfo.X - 2), (short)(glInfo.GroundY - 5), 5, 5);
                 return;
             }
         }
@@ -1388,7 +1387,7 @@ namespace cctgPlugin
             {
                 e.Handled = true;
                 var glInfo = houseBuilder.GemLockInfos[idx];
-                e.Player.SendTileRect((short)(glInfo.WallLeft - 1), (short)(glInfo.WallTop - 1), 5, 5);
+                e.Player.SendTileRect((short)(glInfo.X - 2), (short)(glInfo.GroundY - 5), 5, 5);
             }
         }
 

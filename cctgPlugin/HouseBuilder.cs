@@ -104,7 +104,20 @@ namespace cctgPlugin
         private void PlaceOneGemLock(int houseX, int houseY, int direction, int style, string teamName)
         {
             var loc = FindGemLockLocation(houseX, houseY, direction);
-            PlaceGemLockStructure(loc.X, loc.Y, style);
+
+            string gemTeam = style == 0 ? "red" : "blue";
+            string schematicPath = System.IO.Path.Combine(TShock.SavePath, $"cctg{gemTeam}gem.TEditSch");
+            if (System.IO.File.Exists(schematicPath))
+            {
+                Point size = SchematicLoader.ReadSize(schematicPath);
+                SchematicLoader.Paste(schematicPath, loc.X - size.X / 2, loc.Y - size.Y);
+                gemLockInfos.Add(new GemLockInfo { X = loc.X, GroundY = loc.Y, Style = style });
+                TShock.Log.ConsoleInfo($"[CCTG] {teamName} gem schematic ({size.X}x{size.Y}) pasted at ({loc.X - size.X / 2},{loc.Y - size.Y})");
+            }
+            else
+            {
+                PlaceGemLockStructure(loc.X, loc.Y, style);
+            }
 
             // Verify the gem lock tiles actually exist
             var info = gemLockInfos[gemLockInfos.Count - 1];
@@ -782,11 +795,11 @@ namespace cctgPlugin
             for (int i = 0; i < gemLockInfos.Count; i++)
             {
                 var info = gemLockInfos[i];
-                if (tileX >= info.WallLeft && tileX <= info.WallRight &&
-                    tileY >= info.WallTop && tileY <= info.WallBottom)
-                {
+
+                // Full 5x5 schematic area
+                if (tileX >= info.X - 2 && tileX <= info.X + 2 &&
+                    tileY >= info.GroundY - 5 && tileY <= info.GroundY - 1)
                     return i;
-                }
             }
             return -1;
         }
@@ -852,10 +865,9 @@ namespace cctgPlugin
         /// </summary>
         private Point BuildSingleHouse(int spawnX, int spawnY, string side, int direction)
         {
-            const int foundationWidth = 16; // foundation tiles that must contact ground
-            const int maxHeight = 11; // highest height
+            const int foundationWidth = 16;
+            const int maxHeight = 11;
 
-            // Find suitable location — returns LocationResult with X, GroundLevel, SurfaceHeights
             var result = locationFinder.FindLocation(spawnX, spawnY, foundationWidth, maxHeight, direction, side);
 
             int startX;
@@ -873,27 +885,42 @@ namespace cctgPlugin
             }
             else
             {
-                // Use result.X — fixes the X propagation bug where centerX was never updated
                 startX = result.X;
                 groundLevel = result.GroundLevel;
                 surfaceHeights = result.SurfaceHeights;
             }
 
-            // Build the house structure with surface heights for grounding
-            Point spawnPoint = houseStructure.BuildHouse(startX, groundLevel, direction, side, surfaceHeights);
-
-            // Get and save protected areas
-            var (leftRoom, rightRoom) = houseStructure.GetProtectedAreas(startX, groundLevel, direction);
-            protectedHouseAreas.Add(leftRoom);
-            protectedHouseAreas.Add(rightRoom);
-
-            TShock.Log.ConsoleInfo($"[CCTG] {side} House protected areas recorded:");
-            TShock.Log.ConsoleInfo($"[CCTG] Left room protected area: ({leftRoom.X}, {leftRoom.Y}, {leftRoom.Width}x{leftRoom.Height})");
-            TShock.Log.ConsoleInfo($"[CCTG] Right room protected area: ({rightRoom.X}, {rightRoom.Y}, {rightRoom.Width}x{rightRoom.Height})");
-
             string teamName = direction < 0 ? "red" : "blue";
-            CreateHouseRegion($"cctg_house_{teamName}_left", leftRoom);
-            CreateHouseRegion($"cctg_house_{teamName}_right", rightRoom);
+            string schematicPath = System.IO.Path.Combine(TShock.SavePath, $"cctg{teamName}base.TEditSch");
+
+            Point spawnPoint;
+            Rectangle protectedArea;
+
+            if (System.IO.File.Exists(schematicPath))
+            {
+                Point size = SchematicLoader.ReadSize(schematicPath);
+                int pasteY = groundLevel - size.Y;
+                SchematicLoader.Paste(schematicPath, startX, pasteY);
+                protectedArea = new Rectangle(startX, pasteY, size.X, size.Y);
+                spawnPoint = new Point(startX + size.X / 2, groundLevel - 5);
+                TShock.Log.ConsoleInfo($"[CCTG] {side} Schematic ({size.X}x{size.Y}) pasted at ({startX},{pasteY}), spawn=({spawnPoint.X},{spawnPoint.Y})");
+            }
+            else
+            {
+                TShock.Log.ConsoleWarn($"[CCTG] Schematic not found: {schematicPath}, falling back to procedural build");
+                spawnPoint = houseStructure.BuildHouse(startX, groundLevel, direction, side, surfaceHeights);
+                var (leftRoom, rightRoom) = houseStructure.GetProtectedAreas(startX, groundLevel, direction);
+                protectedHouseAreas.Add(leftRoom);
+                protectedHouseAreas.Add(rightRoom);
+                TShock.Log.ConsoleInfo($"[CCTG] Left room: ({leftRoom.X},{leftRoom.Y} {leftRoom.Width}x{leftRoom.Height})");
+                TShock.Log.ConsoleInfo($"[CCTG] Right room: ({rightRoom.X},{rightRoom.Y} {rightRoom.Width}x{rightRoom.Height})");
+                CreateHouseRegion($"cctg_house_{teamName}_left", leftRoom);
+                CreateHouseRegion($"cctg_house_{teamName}_right", rightRoom);
+                return spawnPoint;
+            }
+
+            protectedHouseAreas.Add(protectedArea);
+            CreateHouseRegion($"cctg_house_{teamName}", protectedArea);
 
             return spawnPoint;
         }
@@ -909,7 +936,8 @@ namespace cctgPlugin
         private static readonly string[] HouseRegionNames = new[]
         {
             "cctg_house_red_left", "cctg_house_red_right",
-            "cctg_house_blue_left", "cctg_house_blue_right"
+            "cctg_house_blue_left", "cctg_house_blue_right",
+            "cctg_house_red", "cctg_house_blue"
         };
 
         private void CreateHouseRegion(string name, Rectangle area)
