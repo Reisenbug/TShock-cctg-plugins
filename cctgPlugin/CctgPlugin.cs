@@ -565,7 +565,20 @@ namespace cctgPlugin
             if (_cycleState == CycleState.WaitingConfirm || _cycleState == CycleState.Swapping || _cycleState == CycleState.StartPending)
                 return;
             if (!string.IsNullOrEmpty(_generatingFilename))
-                return;
+            {
+                string pendingPath = Path.Combine(Main.WorldPath, _generatingFilename + ".wld");
+                if (File.Exists(pendingPath) && new FileInfo(pendingPath).Length > 0)
+                {
+                    _worldQueue.Enqueue(_generatingFilename);
+                    TShock.Log.ConsoleInfo($"[CCTG] Recovered pending world {_generatingFilename} into queue");
+                    _generatingFilename = null;
+                    SaveWorldQueue();
+                }
+                else
+                {
+                    return;
+                }
+            }
             if (_worldQueue.Count >= WORLD_QUEUE_TARGET)
                 return;
             if (WorldGenPlugin.WorldGenPlugin.Instance?.IsGenerating == true)
@@ -2702,21 +2715,10 @@ namespace cctgPlugin
                     int distanceTiles = Math.Abs(carrierTileX - carrierHouse.X);
                     int distanceFeet = distanceTiles * 2;
 
-                    // Check if carrier is inside their own house (any protected area of their team)
+                    // Check if carrier is near their own house spawn point (within 5 tiles)
                     int carrierTileY = (int)(carrier.TPlayer.position.Y / 16f);
-                    bool inOwnHouse = false;
-                    // Red team houses = indices 0,1; Blue team houses = indices 2,3
-                    var areas = houseBuilder.ProtectedHouseAreas;
-                    int areaStart = carrierTeam == 1 ? 0 : 2;
-                    int areaEnd = carrierTeam == 1 ? 2 : 4;
-                    for (int a = areaStart; a < areaEnd && a < areas.Count; a++)
-                    {
-                        if (areas[a].Contains(carrierTileX, carrierTileY))
-                        {
-                            inOwnHouse = true;
-                            break;
-                        }
-                    }
+                    bool inOwnHouse = Math.Abs(carrierTileX - carrierHouse.X) <= 3 &&
+                                     Math.Abs(carrierTileY - carrierHouse.Y) <= 1;
 
                     if (inOwnHouse)
                     {

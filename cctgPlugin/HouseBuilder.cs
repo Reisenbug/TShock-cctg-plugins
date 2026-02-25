@@ -28,6 +28,8 @@ namespace cctgPlugin
     {
         // Protected house areas
         private List<Rectangle> protectedHouseAreas = new List<Rectangle>();
+        private List<Rectangle> redTeamAreas = new List<Rectangle>();
+        private List<Rectangle> blueTeamAreas = new List<Rectangle>();
 
         // Left/right house positions for team teleportation
         private Point leftHouseSpawn = new Point(-1, -1);
@@ -45,6 +47,8 @@ namespace cctgPlugin
 
         // Property accessors
         public List<Rectangle> ProtectedHouseAreas => protectedHouseAreas;
+        public List<Rectangle> RedTeamAreas => redTeamAreas;
+        public List<Rectangle> BlueTeamAreas => blueTeamAreas;
         public Point LeftHouseSpawn => leftHouseSpawn;
         public Point RightHouseSpawn => rightHouseSpawn;
         public bool HousesBuilt => housesBuilt;
@@ -110,7 +114,10 @@ namespace cctgPlugin
             if (System.IO.File.Exists(schematicPath))
             {
                 Point size = SchematicLoader.ReadSize(schematicPath);
-                SchematicLoader.Paste(schematicPath, loc.X - size.X / 2, loc.Y - size.Y);
+                int pasteX = loc.X - size.X / 2;
+                int pasteY = loc.Y - size.Y;
+                ClearTreesInArea(pasteX, pasteY, size.X);
+                SchematicLoader.Paste(schematicPath, pasteX, pasteY);
                 gemLockInfos.Add(new GemLockInfo { X = loc.X, GroundY = loc.Y, Style = style });
                 TShock.Log.ConsoleInfo($"[CCTG] {teamName} gem schematic ({size.X}x{size.Y}) pasted at ({loc.X - size.X / 2},{loc.Y - size.Y})");
             }
@@ -615,6 +622,8 @@ namespace cctgPlugin
 
             // Clear protected house areas list
             protectedHouseAreas.Clear();
+            redTeamAreas.Clear();
+            blueTeamAreas.Clear();
 
             // Reset house positions
             leftHouseSpawn = new Point(-1, -1);
@@ -912,6 +921,9 @@ namespace cctgPlugin
                 var (leftRoom, rightRoom) = houseStructure.GetProtectedAreas(startX, groundLevel, direction);
                 protectedHouseAreas.Add(leftRoom);
                 protectedHouseAreas.Add(rightRoom);
+                var teamAreasFallback = direction < 0 ? redTeamAreas : blueTeamAreas;
+                teamAreasFallback.Add(leftRoom);
+                teamAreasFallback.Add(rightRoom);
                 TShock.Log.ConsoleInfo($"[CCTG] Left room: ({leftRoom.X},{leftRoom.Y} {leftRoom.Width}x{leftRoom.Height})");
                 TShock.Log.ConsoleInfo($"[CCTG] Right room: ({rightRoom.X},{rightRoom.Y} {rightRoom.Width}x{rightRoom.Height})");
                 CreateHouseRegion($"cctg_house_{teamName}_left", leftRoom);
@@ -920,6 +932,8 @@ namespace cctgPlugin
             }
 
             protectedHouseAreas.Add(protectedArea);
+            var teamAreas = direction < 0 ? redTeamAreas : blueTeamAreas;
+            teamAreas.Add(protectedArea);
             CreateHouseRegion($"cctg_house_{teamName}", protectedArea);
 
             return spawnPoint;
@@ -931,6 +945,23 @@ namespace cctgPlugin
         private bool IsValidCoord(int x, int y)
         {
             return x >= 0 && x < Main.maxTilesX && y >= 0 && y < Main.maxTilesY;
+        }
+
+        private void ClearTreesInArea(int startX, int startY, int width)
+        {
+            int clearTop = Math.Max(0, startY - 30);
+            for (int x = startX; x < startX + width; x++)
+            {
+                for (int y = clearTop; y < startY; y++)
+                {
+                    if (!IsValidCoord(x, y)) continue;
+                    var tile = Main.tile[x, y];
+                    if (!tile.active()) continue;
+                    int t = tile.type;
+                    if (t == 5 || t == 323)
+                        tile.ClearEverything();
+                }
+            }
         }
 
         private static readonly string[] HouseRegionNames = new[]
