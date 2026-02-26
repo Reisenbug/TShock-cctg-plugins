@@ -1475,6 +1475,13 @@ namespace cctgPlugin
             if (player == null)
                 return;
 
+            // Block all packets during world swap
+            if (_cycleState == CycleState.Swapping || _cycleState == CycleState.StartPending)
+            {
+                e.Handled = true;
+                return;
+            }
+
             // Log all packet types once for debugging
             if (!loggedPacketTypes.Contains(e.MsgID))
             {
@@ -1902,7 +1909,7 @@ namespace cctgPlugin
                     foreach (var kvp in hookDropStates)
                     {
                         var player = TShock.Players[kvp.Key];
-                        if (player == null || !player.Active)
+                        if (player == null || !player.Active || player.TPlayer.dead)
                             continue;
 
                         var stateList = kvp.Value;
@@ -1910,13 +1917,6 @@ namespace cctgPlugin
 
                         foreach (var state in stateList)
                         {
-                            double secSinceDrop = (DateTime.Now - state.DropTime).TotalSeconds;
-                            if (secSinceDrop < 8.0)
-                            {
-                                TShock.Log.ConsoleInfo($"[CCTG][DEBUG] HookDrop {player.Name}: waiting ({secSinceDrop:F1}s < 8s)");
-                                continue;
-                            }
-
                             float dx = player.TPlayer.position.X - state.DeathX;
                             float dy = player.TPlayer.position.Y - state.DeathY;
                             TShock.Log.ConsoleInfo($"[CCTG][DEBUG] HookDrop {player.Name}: playerPos=({player.TPlayer.position.X:F0},{player.TPlayer.position.Y:F0}) deathPos=({state.DeathX:F0},{state.DeathY:F0}) dx={dx:F0} dy={dy:F0}");
@@ -2151,6 +2151,11 @@ namespace cctgPlugin
                         {
                             TShock.Log.ConsoleInfo($"[CCTG][DEBUG] Transitioning to Swapping, queue={_worldQueue.Count}");
                             _cycleState = CycleState.Swapping;
+                            foreach (var p in TShock.Players)
+                            {
+                                if (p != null && p.Active)
+                                    p.SetBuff(149, 60 * 60); // Webbed, 60 seconds
+                            }
                         }
                     }
                 }
@@ -2412,7 +2417,7 @@ namespace cctgPlugin
                 int foundPlayerIndex = -1;
                 foreach (var player in TShock.Players)
                 {
-                    if (player == null || !player.Active)
+                    if (player == null || !player.Active || player.TPlayer.dead)
                         continue;
 
                     if (player.TPlayer.team != requiredTeam)
@@ -2625,6 +2630,9 @@ namespace cctgPlugin
                         ReturnGem(i, state);
                         continue;
                     }
+
+                    if (carrier.TPlayer.dead)
+                        continue;
 
                     bool carrierHasGem = PlayerHasGemItem(carrier.TPlayer, gemItemId);
 
