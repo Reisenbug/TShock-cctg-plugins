@@ -170,8 +170,6 @@ namespace cctgPlugin
             Commands.ChatCommands.Add(new Command(ResumeNextRound, "next"));
             Commands.ChatCommands.Add(new Command(StartNextCommand, "startnext"));
 
-            TShock.Log.ConsoleInfo("CctgPlugin loaded!");
-            TShock.Log.ConsoleInfo("[CCTG] RestrictItem module initialized - monitoring Ebonstone(61), Crimstone(836)");
                     }
 
         protected override void Dispose(bool disposing)
@@ -195,7 +193,6 @@ namespace cctgPlugin
         {
             // Initialize BiomeDetector after world is loaded
             biomeDetector = new BiomeDetector();
-            TShock.Log.ConsoleInfo("[CCTG] Plugin loaded");
             RestoreWorldQueue();
         }
 
@@ -331,7 +328,6 @@ namespace cctgPlugin
             }
 
             _spectatorBox = new Point(boxX, boxY);
-            TShock.Log.ConsoleInfo($"[CCTG][DEBUG] Building spectator box at ({boxX},{boxY}), maxTilesX={Main.maxTilesX}, worldSurface={Main.worldSurface}");
             BuildSpectatorBox(boxX, boxY);
 
             // 2. Paint world
@@ -400,7 +396,6 @@ namespace cctgPlugin
                 state.LastTeam = team;
                 state.LastTeamChangeTime = DateTime.Now;
 
-                TShock.Log.ConsoleInfo($"[CCTG] Player {player.Name} assigned to {teamName}, preparing teleport");
             }
 
             gameStarted = true;
@@ -541,7 +536,6 @@ namespace cctgPlugin
             _confirmBroadcasted2 = false;
             _cycleStateTime = DateTime.Now;
 
-            TShock.Log.ConsoleInfo($"[CCTG][DEBUG] EndGame: queue={_worldQueue.Count}, cycleState={_cycleState}, generatingFilename={_generatingFilename}");
             if (_worldQueue.Count > 0)
             {
                 _cycleState = CycleState.WaitingConfirm;
@@ -570,7 +564,6 @@ namespace cctgPlugin
                 if (File.Exists(pendingPath) && new FileInfo(pendingPath).Length > 0)
                 {
                     _worldQueue.Enqueue(_generatingFilename);
-                    TShock.Log.ConsoleInfo($"[CCTG] Recovered pending world {_generatingFilename} into queue");
                     _generatingFilename = null;
                     SaveWorldQueue();
                 }
@@ -585,7 +578,6 @@ namespace cctgPlugin
             {
                 _cycleState = CycleState.Generating;
                 _cycleStateTime = DateTime.Now;
-                TShock.Log.ConsoleInfo("[CCTG] WorldGen is already running, waiting for it to complete...");
                 return;
             }
             _generatingFilename = Guid.NewGuid().ToString("N").Substring(0, 8);
@@ -637,7 +629,6 @@ namespace cctgPlugin
             var player = args.Player;
             string debugInfo = boundaryChecker.GetDebugInfo(player);
             player.SendInfoMessage(debugInfo);
-            TShock.Log.ConsoleInfo($"[CCTG] {player.Name} used boundary check debug command");
         }
 
         // Debug command: Check biome layout
@@ -657,7 +648,6 @@ namespace cctgPlugin
             string simpleInfo = biomeDetector.GetBiomeInfoMessage();
             player.SendSuccessMessage($"Biome Layout: {simpleInfo}");
 
-            TShock.Log.ConsoleInfo($"[CCTG] {player.Name} used biome debug command");
         }
 
         // Debug command: Check Demolitionist shop items
@@ -666,7 +656,6 @@ namespace cctgPlugin
             var player = args.Player;
 
             player.SendInfoMessage("Checking Demolitionist shop items...");
-            TShock.Log.ConsoleInfo($"[CCTG] {player.Name} used shop debug command");
 
             // Call the debug method from RestrictItem
             restrictItem.DebugDemolitionistShop();
@@ -820,7 +809,6 @@ namespace cctgPlugin
             restrictItem.CheckAndRemoveRestrictedItems(player);
             player.SendSuccessMessage("Manual check complete!");
 
-            TShock.Log.ConsoleInfo($"[CCTG] {player.Name} used item restriction debug command");
         }
 
         // Set game time
@@ -985,7 +973,6 @@ namespace cctgPlugin
             if (playerTeam != 1 && playerTeam != 3)
                 return;
 
-            TShock.Log.ConsoleInfo($"[CCTG][DEBUG] OnPlayerKillMe: {player.Name} crossingAllowed={crossingAllowed} pvp={args.Pvp}");
 
             if (crossingAllowed && args.Pvp)
             {
@@ -1048,7 +1035,6 @@ namespace cctgPlugin
 
             string deadTeamName = playerTeam == 1 ? "Red" : "Blue";
             _pendingSpectators.Add(player.Index);
-            TShock.Log.ConsoleInfo($"[CCTG][DEBUG] OnPlayerKillMe: {player.Name} ({deadTeamName}) died, added to pendingSpectators (count={_pendingSpectators.Count}), suddenDeath={_suddenDeathMode}");
 
             CheckTeamElimination(playerTeam, deadTeamName);
         }
@@ -1140,7 +1126,6 @@ namespace cctgPlugin
 
         private void MoveToSpectator(TSPlayer player)
         {
-            TShock.Log.ConsoleInfo($"[CCTG][DEBUG] MoveToSpectator START: {player.Name}, teleport target=({(_spectatorBox.X + 2) * 16f},{(_spectatorBox.Y + 1) * 16f})");
             player.SetTeam(4);
 
             for (int i = 0; i < NetItem.InventorySlots; i++)
@@ -1167,10 +1152,8 @@ namespace cctgPlugin
                 player.SendData(PacketTypes.PlayerSlot, "", player.Index, NetItem.InventorySlots + NetItem.ArmorSlots + NetItem.DyeSlots + NetItem.MiscEquipSlots + i);
 
             player.Teleport((_spectatorBox.X + 2) * 16f, (_spectatorBox.Y + 1) * 16f);
-            TShock.Log.ConsoleInfo($"[CCTG][DEBUG] MoveToSpectator: Teleport called for {player.Name}");
             player.GiveItem(5644, 1);
             player.SendMessage("You are in spectate mode. You can use Scrying Orb to spectate other players.", 255, 105, 180);
-            TShock.Log.ConsoleInfo($"[CCTG][DEBUG] MoveToSpectator END: {player.Name}");
         }
 
         private void ClearPlayerInventory(TSPlayer player)
@@ -1437,7 +1420,6 @@ namespace cctgPlugin
                     state.LastModifiedFrame = 0;
                     state.TargetNPCIndex = npcIndex;
 
-                    TShock.Log.ConsoleInfo($"[CCTG] Started timed shop modification for player {player.Name} (10s, every 0.5s)");
                 }
             }
             catch (Exception ex)
@@ -1453,12 +1435,10 @@ namespace cctgPlugin
             if (player == null)
                 return;
 
-            TShock.Log.ConsoleInfo($"[CCTG] Player {player.Name} joined game");
 
             if (gameStarted && pvpEnabled)
             {
                 pendingJoinAssignments[e.Who] = DateTime.Now;
-                TShock.Log.ConsoleInfo($"[CCTG] Mid-game join: {player.Name} queued for team assignment in 1.5s");
             }
         }
 
@@ -1486,7 +1466,6 @@ namespace cctgPlugin
             if (!loggedPacketTypes.Contains(e.MsgID))
             {
                 loggedPacketTypes.Add(e.MsgID);
-                TShock.Log.ConsoleInfo($"[CCTG] New packet type seen: {e.MsgID}");
             }
 
             // === Block manual PVP toggle during game ===
@@ -1512,7 +1491,6 @@ namespace cctgPlugin
                     Main.player[player.Index].team = newTeam;
 
                     string teamName = newTeam == 1 ? "Red" : newTeam == 3 ? "Blue" : newTeam.ToString();
-                    TShock.Log.ConsoleInfo($"[CCTG] Player {player.Name} manually switched to team {teamName} (packet 157)");
                 }
             }
 
@@ -1554,7 +1532,6 @@ namespace cctgPlugin
                                 recallState.WaitingForTeleport = true;
                                 recallState.LastItemUseTime = DateTime.Now;
                                 recallState.LastKnownPosition = player.TPlayer.position;
-                                TShock.Log.ConsoleInfo($"[CCTG] Used recall item, waiting for teleport");
                             }
                         }
                     }
@@ -1573,12 +1550,10 @@ namespace cctgPlugin
             // === Monitor respawn events ===
             if (e.MsgID == PacketTypes.PlayerSpawn)
             {
-                TShock.Log.ConsoleInfo($"[CCTG][DEBUG] PlayerSpawn packet from {player.Name} (index={player.Index}), pendingSpectators contains={_pendingSpectators.Contains(player.Index)}, pendingCount={_pendingSpectators.Count}");
                 if (_pendingSpectators.Contains(player.Index))
                 {
                     _pendingSpectators.Remove(player.Index);
                     _delayedSpectators[player.Index] = 30;
-                    TShock.Log.ConsoleInfo($"[CCTG][DEBUG] {player.Name} queued for delayed spectator move (30 ticks)");
                     return;
                 }
 
@@ -1605,8 +1580,8 @@ namespace cctgPlugin
                     state.LastTeamChangeTime = DateTime.Now;
 
                     string teamName = playerTeam == 1 ? "Red Team" : playerTeam == 3 ? "Blue Team" : "No Team";
-                    TShock.Log.ConsoleInfo($"[CCTG] Player {player.Name} respawned, team {teamName}");
 
+                    state.RespawnFullHp = player.TPlayer.statLifeMax2;
                     player.SendInfoMessage($"Respawning, teleporting to {teamName} house in 0.5s");
                 }
             }
@@ -1626,7 +1601,6 @@ namespace cctgPlugin
                         var p = TShock.Players[key];
                         if (p != null && p.Active)
                         {
-                            TShock.Log.ConsoleInfo($"[CCTG][DEBUG] Delayed MoveToSpectator for {p.Name}");
                             MoveToSpectator(p);
                         }
                     }
@@ -1750,7 +1724,6 @@ namespace cctgPlugin
                     if (state.FrameCounter >= SHOP_MODIFICATION_DURATION)
                     {
                         state.IsModifying = false;
-                        TShock.Log.ConsoleInfo($"[CCTG] Stopped shop modification for player {player.Name} (10s elapsed)");
                         shopPlayersToRemove.Add(playerIndex);
                         continue;
                     }
@@ -1776,7 +1749,6 @@ namespace cctgPlugin
                                 {
                                     // Player moved away, stop modification
                                     state.IsModifying = false;
-                                    TShock.Log.ConsoleInfo($"[CCTG] Stopped shop modification for player {player.Name} (moved away from demolitionsit)");
                                     shopPlayersToRemove.Add(playerIndex);
                                 }
                             }
@@ -1784,7 +1756,6 @@ namespace cctgPlugin
                             {
                                 // NPC is no longer active, stop modification
                                 state.IsModifying = false;
-                                TShock.Log.ConsoleInfo($"[CCTG] Stopped shop modification for player {player.Name} (NPC no longer active)");
                                 shopPlayersToRemove.Add(playerIndex);
                             }
                         }
@@ -1919,7 +1890,6 @@ namespace cctgPlugin
                         {
                             float dx = player.TPlayer.position.X - state.DeathX;
                             float dy = player.TPlayer.position.Y - state.DeathY;
-                            TShock.Log.ConsoleInfo($"[CCTG][DEBUG] HookDrop {player.Name}: playerPos=({player.TPlayer.position.X:F0},{player.TPlayer.position.Y:F0}) deathPos=({state.DeathX:F0},{state.DeathY:F0}) dx={dx:F0} dy={dy:F0}");
                             if (Math.Abs(dx) > 64f || Math.Abs(dy) > 64f)
                                 continue;
 
@@ -1931,7 +1901,6 @@ namespace cctgPlugin
                                     emptySlots++;
                             }
 
-                            TShock.Log.ConsoleInfo($"[CCTG][DEBUG] HookDrop {player.Name}: emptySlots={emptySlots} needed={state.DroppedHooks.Count}");
                             if (emptySlots >= state.DroppedHooks.Count)
                             {
                                 int slotIdx = 0;
@@ -2028,7 +1997,6 @@ namespace cctgPlugin
                         state.LastTeam = team;
                         state.LastTeamChangeTime = DateTime.Now;
 
-                        TShock.Log.ConsoleInfo($"[CCTG] Mid-game join: {player.Name} assigned to {teamName} (Red={redCount}, Blue={blueCount})");
                     }
                 }
                 foreach (int key in toRemove)
@@ -2082,7 +2050,6 @@ namespace cctgPlugin
                         _cycleStateTime = DateTime.Now;
                         _confirmBroadcasted = false;
                         _confirmBroadcasted2 = false;
-                        TShock.Log.ConsoleInfo("[CCTG] Game ended and world ready, starting countdown...");
                     }
                     else
                     {
@@ -2100,7 +2067,6 @@ namespace cctgPlugin
                 }
                 else if (WorldGenPlugin.WorldGenPlugin.Instance?.IsGenerating != true)
                 {
-                    TShock.Log.ConsoleInfo($"[CCTG] WorldGen finished but file not found for {_generatingFilename}, retrying...");
                     _generatingFilename = null;
                     _cycleState = CycleState.Idle;
                     TryStartNextGeneration();
@@ -2125,7 +2091,6 @@ namespace cctgPlugin
                 }
                 if (elapsed >= 10)
                 {
-                    TShock.Log.ConsoleInfo($"[CCTG][DEBUG] WaitingConfirm elapsed 10s: cancelled={_cycleCancelled}, queue={_worldQueue.Count}");
                     if (_cycleCancelled)
                     {
                         _cycleState = CycleState.Idle;
@@ -2145,11 +2110,9 @@ namespace cctgPlugin
                         if (!hasPlayers)
                         {
                             _cycleState = CycleState.Idle;
-                            TShock.Log.ConsoleInfo("[CCTG] No players online, auto-cycle cancelled.");
                         }
                         else
                         {
-                            TShock.Log.ConsoleInfo($"[CCTG][DEBUG] Transitioning to Swapping, queue={_worldQueue.Count}");
                             _cycleState = CycleState.Swapping;
                             foreach (var p in TShock.Players)
                             {
@@ -2188,13 +2151,11 @@ namespace cctgPlugin
                     _cycleState = CycleState.Idle;
 
                     // Delete previous world files
-                    TShock.Log.ConsoleInfo($"[CCTG] StartPending: prevWorldPath={_prevWorldPath ?? "(null)"}");
                     if (!string.IsNullOrEmpty(_prevWorldPath))
                     {
                         try
                         {
                             bool wldExists = File.Exists(_prevWorldPath);
-                            TShock.Log.ConsoleInfo($"[CCTG] Attempting delete: {_prevWorldPath} (exists={wldExists})");
                             if (wldExists)
                                 File.Delete(_prevWorldPath);
                             string twldPath = Path.ChangeExtension(_prevWorldPath, ".twld");
@@ -2258,7 +2219,6 @@ namespace cctgPlugin
                 if (pvpEnabled && player.TPlayer.team == 0 && !pendingJoinAssignments.ContainsKey(player.Index))
                 {
                     pendingJoinAssignments[player.Index] = DateTime.Now;
-                    TShock.Log.ConsoleInfo($"[CCTG] Player {player.Name} logged in (was guest), queued for team assignment");
                     continue;
                 }
 
@@ -2267,7 +2227,6 @@ namespace cctgPlugin
                 {
                     teleportManager.PlayerTeamStates[player.Index] = new PlayerTeamState();
                     teleportManager.PlayerTeamStates[player.Index].LastTeam = player.Team;
-                    TShock.Log.ConsoleInfo($"[CCTG] Initialized team state for {player.Name}: Team={player.Team}, TPlayer.team={player.TPlayer.team}");
                 }
 
                 var state = teleportManager.PlayerTeamStates[player.Index];
@@ -2278,7 +2237,6 @@ namespace cctgPlugin
                 {
                     int previousTeam = state.LastTeam;
                     string teamName = currentTeam == 1 ? "Red Team" : currentTeam == 3 ? "Blue Team" : "Other";
-                    TShock.Log.ConsoleInfo($"[CCTG] Player {player.Name} team changed: {previousTeam} -> {currentTeam} ({teamName})");
 
                     state.LastTeam = currentTeam;
 
@@ -2290,18 +2248,15 @@ namespace cctgPlugin
                     {
                         ResetPlayerInventoryAndStats(player);
                         state.LastTeamChangeTime = DateTime.Now;
-                        TShock.Log.ConsoleInfo($"[CCTG] Player {player.Name} left spectator, reset inventory and scheduled teleport");
                     }
                     else if (currentTeam == 1 || currentTeam == 3)
                     {
                         ResetPlayerInventoryAndStats(player);
                         state.LastTeamChangeTime = DateTime.Now;
-                        TShock.Log.ConsoleInfo($"[CCTG] Player {player.Name} switched team, reset inventory and scheduled teleport");
                     }
                     else if (currentTeam == 0 || currentTeam == 2 || currentTeam == 5)
                     {
                         ClearPlayerInventory(player);
-                        TShock.Log.ConsoleInfo($"[CCTG] Player {player.Name} switched to non-game team {currentTeam}, cleared inventory");
                     }
                 }
 
@@ -2312,12 +2267,19 @@ namespace cctgPlugin
 
                     if (timeSinceChange >= 0.5)
                     {
-                        TShock.Log.ConsoleInfo($"[CCTG] Executing teleport for {player.Name}");
                         ForceReturnGemOnTeleport(player);
                         teleportManager.TeleportToTeamHouse(player, houseBuilder.LeftHouseSpawn, houseBuilder.RightHouseSpawn);
 
-                        // Clear teleport marker
+                        // Clear teleport marker and respawn HP guard
                         state.LastTeamChangeTime = DateTime.MinValue;
+                        state.RespawnFullHp = 0;
+                    }
+                    else if (state.RespawnFullHp > 0 && player.TPlayer.statLife < state.RespawnFullHp)
+                    {
+                        int lost = state.RespawnFullHp - player.TPlayer.statLife;
+                        player.TPlayer.statLife = state.RespawnFullHp;
+                        player.TPlayer.Heal(lost);
+                        player.SendData(PacketTypes.PlayerHp, "", player.Index);
                     }
                 }
 
@@ -2338,7 +2300,6 @@ namespace cctgPlugin
                             // If position changed > 200 pixels, teleport occurred
                             if (distance > 200f)
                             {
-                                TShock.Log.ConsoleInfo($"[CCTG] Recall teleport detected (distance: {distance}), 0.5s teleport to team house");
 
                                 // Force return gem if player is carrying one
                                 ForceReturnGemOnTeleport(player);
@@ -2356,7 +2317,6 @@ namespace cctgPlugin
                         }
                         else
                         {
-                            TShock.Log.ConsoleInfo($"[CCTG] Teleport wait timeout, cancelled");
                             recallState.WaitingForTeleport = false;
                         }
                     }
@@ -2556,7 +2516,6 @@ namespace cctgPlugin
                             picker.TPlayer.inventory[emptySlot].SetDefaults(gemItemId);
                             picker.TPlayer.inventory[emptySlot].stack = 1;
                             picker.SendData(PacketTypes.PlayerSlot, "", picker.Index, emptySlot);
-                            TShock.Log.ConsoleInfo($"[CCTG] Gave {picker.Name} large gem item ID {gemItemId} in slot {emptySlot}");
 
                             // Mark as completed — stop detecting this gem lock
                             state.Completed = true;
