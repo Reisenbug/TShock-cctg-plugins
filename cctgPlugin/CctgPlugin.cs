@@ -2589,10 +2589,10 @@ namespace cctgPlugin
                         continue;
                     }
 
-                    if (carrier.TPlayer.dead)
-                        continue;
-
                     bool carrierHasGem = PlayerHasGemItem(carrier.TPlayer, gemItemId);
+
+                    if (carrier.TPlayer.dead && carrierHasGem)
+                        continue;
 
                     if (!carrierHasGem)
                     {
