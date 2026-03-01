@@ -157,18 +157,18 @@ namespace cctgPlugin
             ServerApi.Hooks.NetGreetPlayer.Register(this, OnPlayerJoin);
 
             // Register commands
-            Commands.ChatCommands.Add(new Command("tshock.admin", PaintWorldCommand, "paintworld"));
-            Commands.ChatCommands.Add(new Command("tshock.admin", BuildHousesCommand, "buildhouses"));
-            Commands.ChatCommands.Add(new Command("tshock.admin", StartCommand, "start"));
-            Commands.ChatCommands.Add(new Command("tshock.admin", EndCommand, "end"));
-            Commands.ChatCommands.Add(new Command("tshock.admin", DebugBoundaryCommand, "debugbound"));
-            Commands.ChatCommands.Add(new Command("tshock.admin", DebugItemCommand, "debugitem"));
-            Commands.ChatCommands.Add(new Command("tshock.admin", DebugBiomeCommand, "debugbiome"));
-            Commands.ChatCommands.Add(new Command("tshock.admin", DebugShopCommand, "debugshop"));
-            Commands.ChatCommands.Add(new Command("tshock.admin", TimerCommand, "t"));
-            Commands.ChatCommands.Add(new Command("tshock.admin", CancelNextRound, "n"));
-            Commands.ChatCommands.Add(new Command("tshock.admin", ResumeNextRound, "next"));
-            Commands.ChatCommands.Add(new Command("tshock.admin", StartNextCommand, "startnext"));
+            Commands.ChatCommands.Add(new Command("cctg.admin", PaintWorldCommand, "paintworld"));
+            Commands.ChatCommands.Add(new Command("cctg.admin", BuildHousesCommand, "buildhouses"));
+            Commands.ChatCommands.Add(new Command("cctg.admin", StartCommand, "start"));
+            Commands.ChatCommands.Add(new Command("cctg.admin", EndCommand, "end"));
+            Commands.ChatCommands.Add(new Command("cctg.admin", DebugBoundaryCommand, "debugbound"));
+            Commands.ChatCommands.Add(new Command("cctg.admin", DebugItemCommand, "debugitem"));
+            Commands.ChatCommands.Add(new Command("cctg.admin", DebugBiomeCommand, "debugbiome"));
+            Commands.ChatCommands.Add(new Command("cctg.admin", DebugShopCommand, "debugshop"));
+            Commands.ChatCommands.Add(new Command("cctg.admin", TimerCommand, "t"));
+            Commands.ChatCommands.Add(new Command("cctg.admin", CancelNextRound, "n"));
+            Commands.ChatCommands.Add(new Command("cctg.admin", ResumeNextRound, "next"));
+            Commands.ChatCommands.Add(new Command("cctg.admin", StartNextCommand, "startnext"));
 
                     }
 
@@ -1482,7 +1482,7 @@ namespace cctgPlugin
             // We need to manually update it here
             if ((int)e.MsgID == 157)
             {
-                if (!player.HasPermission("tshock.admin"))
+                if (!player.HasPermission("cctg.admin"))
                 {
                     e.Handled = true;
                     // Restore current team to client
@@ -1590,7 +1590,6 @@ namespace cctgPlugin
 
                     string teamName = playerTeam == 1 ? "Red Team" : playerTeam == 3 ? "Blue Team" : "No Team";
 
-                    state.RespawnFullHp = player.TPlayer.statLifeMax2;
                     player.SendInfoMessage($"Respawning, teleporting to {teamName} house in 0.5s");
                 }
             }
@@ -2279,16 +2278,7 @@ namespace cctgPlugin
                         ForceReturnGemOnTeleport(player);
                         teleportManager.TeleportToTeamHouse(player, houseBuilder.LeftHouseSpawn, houseBuilder.RightHouseSpawn);
 
-                        // Clear teleport marker and respawn HP guard
                         state.LastTeamChangeTime = DateTime.MinValue;
-                        state.RespawnFullHp = 0;
-                    }
-                    else if (state.RespawnFullHp > 0 && player.TPlayer.statLife < state.RespawnFullHp)
-                    {
-                        int lost = state.RespawnFullHp - player.TPlayer.statLife;
-                        player.TPlayer.statLife = state.RespawnFullHp;
-                        player.TPlayer.Heal(lost);
-                        player.SendData(PacketTypes.PlayerHp, "", player.Index);
                     }
                 }
 
