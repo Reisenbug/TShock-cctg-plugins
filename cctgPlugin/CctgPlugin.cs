@@ -157,18 +157,18 @@ namespace cctgPlugin
             ServerApi.Hooks.NetGreetPlayer.Register(this, OnPlayerJoin);
 
             // Register commands
-            Commands.ChatCommands.Add(new Command(PaintWorldCommand, "paintworld"));
-            Commands.ChatCommands.Add(new Command(BuildHousesCommand, "buildhouses"));
-            Commands.ChatCommands.Add(new Command(StartCommand, "start"));
-            Commands.ChatCommands.Add(new Command(EndCommand, "end"));
-            Commands.ChatCommands.Add(new Command(DebugBoundaryCommand, "debugbound"));
-            Commands.ChatCommands.Add(new Command(DebugItemCommand, "debugitem"));
-            Commands.ChatCommands.Add(new Command(DebugBiomeCommand, "debugbiome"));
-            Commands.ChatCommands.Add(new Command(DebugShopCommand, "debugshop"));
-            Commands.ChatCommands.Add(new Command(TimerCommand, "t"));
-            Commands.ChatCommands.Add(new Command(CancelNextRound, "n"));
-            Commands.ChatCommands.Add(new Command(ResumeNextRound, "next"));
-            Commands.ChatCommands.Add(new Command(StartNextCommand, "startnext"));
+            Commands.ChatCommands.Add(new Command("tshock.admin", PaintWorldCommand, "paintworld"));
+            Commands.ChatCommands.Add(new Command("tshock.admin", BuildHousesCommand, "buildhouses"));
+            Commands.ChatCommands.Add(new Command("tshock.admin", StartCommand, "start"));
+            Commands.ChatCommands.Add(new Command("tshock.admin", EndCommand, "end"));
+            Commands.ChatCommands.Add(new Command("tshock.admin", DebugBoundaryCommand, "debugbound"));
+            Commands.ChatCommands.Add(new Command("tshock.admin", DebugItemCommand, "debugitem"));
+            Commands.ChatCommands.Add(new Command("tshock.admin", DebugBiomeCommand, "debugbiome"));
+            Commands.ChatCommands.Add(new Command("tshock.admin", DebugShopCommand, "debugshop"));
+            Commands.ChatCommands.Add(new Command("tshock.admin", TimerCommand, "t"));
+            Commands.ChatCommands.Add(new Command("tshock.admin", CancelNextRound, "n"));
+            Commands.ChatCommands.Add(new Command("tshock.admin", ResumeNextRound, "next"));
+            Commands.ChatCommands.Add(new Command("tshock.admin", StartNextCommand, "startnext"));
 
                     }
 
@@ -1482,6 +1482,15 @@ namespace cctgPlugin
             // We need to manually update it here
             if ((int)e.MsgID == 157)
             {
+                if (!player.HasPermission("tshock.admin"))
+                {
+                    e.Handled = true;
+                    // Restore current team to client
+                    player.SendData(PacketTypes.PlayerTeam, "", player.Index);
+                    player.SendErrorMessage("You don't have permission to change teams.");
+                    return;
+                }
+
                 using (var reader = new System.IO.BinaryReader(new System.IO.MemoryStream(e.Msg.readBuffer, e.Index, e.Length)))
                 {
                     byte playerId = reader.ReadByte();
