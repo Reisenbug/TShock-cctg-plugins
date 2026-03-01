@@ -72,7 +72,7 @@ namespace cctgPlugin
                 return result;
 
             // House interior must be free of solid blocks — no clearing allowed
-            if (!IsInteriorClear(candidateX, groundLevel, maxHeight))
+            if (!IsInteriorClear(candidateX, groundLevel, maxHeight, foundationWidth))
                 return result;
 
             if (!IsSkyCleared(candidateX, groundLevel, foundationWidth, maxHeight, SkyClearHeight, skyClearRatio))
@@ -214,11 +214,10 @@ namespace cctgPlugin
         /// Checks the same area as ClearHouseInterior: startX-2 to startX+TotalWidth+2,
         /// from groundLevel-maxHeight-1 to groundLevel-1.
         /// </summary>
-        private bool IsInteriorClear(int startX, int groundLevel, int maxHeight)
+        private bool IsInteriorClear(int startX, int groundLevel, int maxHeight, int width = 14)
         {
-            const int totalWidth = 14; // matches HouseStructure.TotalWidth
             int clearStartX = startX - 2;
-            int clearEndX = startX + totalWidth + 2;
+            int clearEndX = startX + width + 2;
 
             for (int x = clearStartX; x < clearEndX; x++)
             {
@@ -290,7 +289,7 @@ namespace cctgPlugin
                 if (!FindFlatGround(candidateX + centerOffset, spawnY, relaxedCheckWidth, relaxedFlatness, out surfaceHeights, out groundLevel))
                     continue;
 
-                int adjustedGroundLevel = AdjustGroundLevelForClearInterior(candidateX, groundLevel, maxHeight);
+                int adjustedGroundLevel = AdjustGroundLevelForClearInterior(candidateX, groundLevel, maxHeight, foundationWidth);
                 if (adjustedGroundLevel == -1)
                     continue;
 
@@ -326,7 +325,7 @@ namespace cctgPlugin
         /// Starts from the given groundLevel and shifts upward (decreasing Y) until clear.
         /// Returns -1 if no valid position found within reasonable range.
         /// </summary>
-        private int AdjustGroundLevelForClearInterior(int startX, int originalGroundLevel, int maxHeight)
+        private int AdjustGroundLevelForClearInterior(int startX, int originalGroundLevel, int maxHeight, int width)
         {
             const int maxShift = 20;
 
@@ -336,7 +335,7 @@ namespace cctgPlugin
                 if (testGroundLevel - maxHeight - 1 < 0)
                     return -1;
 
-                if (IsInteriorClear(startX, testGroundLevel, maxHeight))
+                if (IsInteriorClear(startX, testGroundLevel, maxHeight, width))
                     return testGroundLevel;
             }
 

@@ -24,12 +24,10 @@ namespace cctgPlugin
             if (dungeonX < worldCenterX)
             {
                 dungeonSide = -1; // Left side
-                TShock.Log.ConsoleInfo($"[CCTG] Dungeon detected on LEFT side (X: {dungeonX})");
             }
             else
             {
                 dungeonSide = 1; // Right side
-                TShock.Log.ConsoleInfo($"[CCTG] Dungeon detected on RIGHT side (X: {dungeonX})");
             }
         }
 

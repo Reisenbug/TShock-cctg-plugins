@@ -149,6 +149,8 @@ namespace TeamNPCPlugin
 
         private void OnPostInit(EventArgs args)
         {
+            conditionChecker.Reset();
+
             // Now that the world is loaded, calculate actual spawn positions
             int redSpawnX = Main.spawnTileX + config.RedTeamSpawnX;
             int redSpawnY = Main.spawnTileY + config.RedTeamSpawnY;

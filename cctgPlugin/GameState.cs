@@ -11,6 +11,7 @@ namespace cctgPlugin
     {
         public int LastTeam = 0;
         public DateTime LastTeamChangeTime = DateTime.MinValue;
+        public int RespawnFullHp = 0; // HP to protect after respawn until teleport completes
     }
 
     /// <summary>

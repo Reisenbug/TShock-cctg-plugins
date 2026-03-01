@@ -88,6 +88,12 @@ namespace TeamNPCPlugin
                 TShock.Log.ConsoleInfo($"[TeamNPC] Unlocked NPC {npcIndex} home");
         }
 
+        public void Reset()
+        {
+            playerLockedHomes.Clear();
+            TShock.Log.ConsoleInfo("[TeamNPC] ArrivalConditionChecker reset (world change)");
+        }
+
         private void UpdateTeamStates()
         {
             teamStates["Red"].Players = TShock.Players

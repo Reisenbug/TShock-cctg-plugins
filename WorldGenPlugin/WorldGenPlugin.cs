@@ -221,16 +221,8 @@ namespace WorldGenPlugin
                 _currentProcess = process;
                 _currentExpectedPath = expectedPath;
 
-                process.OutputDataReceived += (s, e) =>
-                {
-                    if (e.Data != null)
-                        TShock.Log.ConsoleInfo($"[WorldGen-Sub] {e.Data}");
-                };
-                process.ErrorDataReceived += (s, e) =>
-                {
-                    if (e.Data != null)
-                        TShock.Log.ConsoleError($"[WorldGen-Sub-Err] {e.Data}");
-                };
+                process.OutputDataReceived += (s, e) => { };
+                process.ErrorDataReceived += (s, e) => { };
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
 

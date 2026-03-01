@@ -874,8 +874,17 @@ namespace cctgPlugin
         /// </summary>
         private Point BuildSingleHouse(int spawnX, int spawnY, string side, int direction)
         {
-            const int foundationWidth = 16;
-            const int maxHeight = 11;
+            string teamName = direction < 0 ? "red" : "blue";
+            string schematicPath = System.IO.Path.Combine(TShock.SavePath, $"cctg{teamName}base.TEditSch");
+
+            int foundationWidth = 16;
+            int maxHeight = 11;
+            if (System.IO.File.Exists(schematicPath))
+            {
+                Point schSize = SchematicLoader.ReadSize(schematicPath);
+                foundationWidth = schSize.X;
+                maxHeight = schSize.Y;
+            }
 
             var result = locationFinder.FindLocation(spawnX, spawnY, foundationWidth, maxHeight, direction, side);
 
@@ -899,16 +908,13 @@ namespace cctgPlugin
                 surfaceHeights = result.SurfaceHeights;
             }
 
-            string teamName = direction < 0 ? "red" : "blue";
-            string schematicPath = System.IO.Path.Combine(TShock.SavePath, $"cctg{teamName}base.TEditSch");
-
             Point spawnPoint;
             Rectangle protectedArea;
 
             if (System.IO.File.Exists(schematicPath))
             {
-                Point size = SchematicLoader.ReadSize(schematicPath);
-                int pasteY = groundLevel - size.Y;
+                Point size = new Point(foundationWidth, maxHeight);
+                int pasteY = groundLevel - size.Y + 1;
                 SchematicLoader.Paste(schematicPath, startX, pasteY);
                 protectedArea = new Rectangle(startX, pasteY, size.X, size.Y);
                 spawnPoint = new Point(startX + size.X / 2, groundLevel - 5);
