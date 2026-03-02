@@ -164,7 +164,6 @@ namespace cctgPlugin
 
                 player.SendRawData(packet);
 
-                TShock.Log.ConsoleInfo($"[CCTG] Sent shop modification packet: Slot {slot}, Item ID {itemId}, Stack {stack}, Price {price}");
             }
             catch (Exception ex)
             {
