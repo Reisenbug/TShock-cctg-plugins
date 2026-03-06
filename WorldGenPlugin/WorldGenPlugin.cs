@@ -40,6 +40,16 @@ namespace WorldGenPlugin
             {
                 Commands.ChatCommands.RemoveAll(c => c.CommandDelegate == GenWorld);
                 Commands.ChatCommands.RemoveAll(c => c.CommandDelegate == KillGenWorld);
+                try
+                {
+                    if (_currentProcess != null && !_currentProcess.HasExited)
+                    {
+                        _currentProcess.Kill(true);
+                        _currentProcess.WaitForExit(3000);
+                    }
+                    _currentProcess?.Dispose();
+                }
+                catch { }
             }
             base.Dispose(disposing);
         }
