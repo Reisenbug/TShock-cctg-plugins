@@ -293,6 +293,10 @@ namespace cctgPlugin
                 if (adjustedGroundLevel == -1)
                     continue;
 
+                // Reject if the house would be floating: require solid ground within 3 tiles below adjustedGroundLevel
+                if (!HasGroundBelow(candidateX, adjustedGroundLevel, foundationWidth, 3))
+                    continue;
+
                 if (!IsSkyCleared(candidateX, adjustedGroundLevel, foundationWidth, maxHeight, SkyClearHeight, relaxedSkyClearance))
                     continue;
 
@@ -356,6 +360,28 @@ namespace cctgPlugin
                 if (tile == null || !tile.active() || !Main.tileSolid[tile.type])
                     continue;
                 return tile.type == 189 || tile.type == 196;
+            }
+            return true;
+        }
+
+        private bool HasGroundBelow(int startX, int groundLevel, int width, int maxGap)
+        {
+            for (int i = 0; i < width; i++)
+            {
+                int x = startX + i;
+                bool foundSolid = false;
+                for (int dy = 1; dy <= maxGap; dy++)
+                {
+                    int y = groundLevel + dy;
+                    if (!IsValidCoord(x, y)) break;
+                    var tile = Main.tile[x, y];
+                    if (tile != null && tile.active() && Main.tileSolid[tile.type])
+                    {
+                        foundSolid = true;
+                        break;
+                    }
+                }
+                if (!foundSolid) return false;
             }
             return true;
         }
