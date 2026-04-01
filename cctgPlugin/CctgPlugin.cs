@@ -1135,21 +1135,35 @@ namespace cctgPlugin
             for (int i = 0; i < NetItem.DyeSlots; i++)
                 player.TPlayer.dye[i].SetDefaults(0);
             for (int i = 0; i < NetItem.MiscEquipSlots; i++)
-            {
                 player.TPlayer.miscEquips[i].SetDefaults(0);
+            for (int i = 0; i < NetItem.MiscDyeSlots; i++)
                 player.TPlayer.miscDyes[i].SetDefaults(0);
+            for (int i = 0; i < NetItem.PiggySlots; i++)
+                player.TPlayer.bank.item[i].SetDefaults(0);
+            for (int i = 0; i < NetItem.SafeSlots; i++)
+                player.TPlayer.bank2.item[i].SetDefaults(0);
+            for (int i = 0; i < NetItem.ForgeSlots; i++)
+                player.TPlayer.bank3.item[i].SetDefaults(0);
+            for (int i = 0; i < NetItem.VoidSlots; i++)
+                player.TPlayer.bank4.item[i].SetDefaults(0);
+            player.TPlayer.trashItem.SetDefaults(0);
+            for (int loadout = 0; loadout < player.TPlayer.Loadouts.Length; loadout++)
+            {
+                var ld = player.TPlayer.Loadouts[loadout];
+                if (ld == null) continue;
+                for (int i = 0; i < ld.Armor.Length; i++)
+                    ld.Armor[i].SetDefaults(0);
+                for (int i = 0; i < ld.Dye.Length; i++)
+                    ld.Dye[i].SetDefaults(0);
+            }
+            for (int b = 0; b < Terraria.Player.maxBuffs; b++)
+            {
+                player.TPlayer.buffType[b] = 0;
+                player.TPlayer.buffTime[b] = 0;
             }
 
-            for (int i = 0; i < NetItem.InventorySlots; i++)
-                player.SendData(PacketTypes.PlayerSlot, "", player.Index, i);
-            for (int i = 0; i < NetItem.ArmorSlots; i++)
-                player.SendData(PacketTypes.PlayerSlot, "", player.Index, NetItem.InventorySlots + i);
-            for (int i = 0; i < NetItem.DyeSlots; i++)
-                player.SendData(PacketTypes.PlayerSlot, "", player.Index, NetItem.InventorySlots + NetItem.ArmorSlots + i);
-            for (int i = 0; i < NetItem.MiscEquipSlots; i++)
-                player.SendData(PacketTypes.PlayerSlot, "", player.Index, NetItem.InventorySlots + NetItem.ArmorSlots + NetItem.DyeSlots + i);
-            for (int i = 0; i < NetItem.MiscDyeSlots; i++)
-                player.SendData(PacketTypes.PlayerSlot, "", player.Index, NetItem.InventorySlots + NetItem.ArmorSlots + NetItem.DyeSlots + NetItem.MiscEquipSlots + i);
+            player.PlayerData.CopyCharacter(player);
+            player.SendServerCharacter();
 
             player.Teleport((_spectatorBox.X + 2) * 16f, (_spectatorBox.Y + 1) * 16f);
             player.GiveItem(5644, 1);
