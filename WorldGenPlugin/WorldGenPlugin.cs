@@ -179,48 +179,35 @@ namespace WorldGenPlugin
 
         private void DoGenerateSubprocess(string serverExe, string worldName, string sizeNum, string evilNum, string seed, string expectedPath)
         {
-            string inputFile = null;
             Process process = null;
-            bool worldCreated = false;
 
             try
             {
-                // Create temp input file with TerrariaServer interactive commands
-                inputFile = Path.GetTempFileName();
-                using (var writer = new StreamWriter(inputFile))
-                {
-                    writer.WriteLine("n");          // Create new world
-                    writer.WriteLine(sizeNum);      // World size
-                    writer.WriteLine("1");          // Difficulty (normal)
-                    writer.WriteLine(evilNum);      // Evil type
-                    writer.WriteLine(worldName);    // World name
-                    writer.WriteLine(seed);         // Seed (blank = random)
-                    writer.WriteLine();             // Extra enter for 1.4.5+
-                    writer.WriteLine("exit");       // Exit after creation
-                }
+                Directory.CreateDirectory(Path.GetDirectoryName(expectedPath));
 
-                TShock.Log.ConsoleInfo($"[WorldGenPlugin] Starting subprocess: {serverExe}, save dir: {Main.WorldPath}, expected: {expectedPath}");
+                // Use -autocreate + -world + -autoshutdown for non-interactive world generation
+                string args = $"-autocreate {sizeNum} -world \"{expectedPath}\" -worldname \"{worldName}\" -autoshutdown -rest-enabled false";
 
                 var startInfo = new ProcessStartInfo
                 {
-                    RedirectStandardInput = true,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
                     CreateNoWindow = true
                 };
 
-                string worldDir = Main.WorldPath;
                 if (serverExe.StartsWith("dotnet:"))
                 {
                     startInfo.FileName = "dotnet";
-                    startInfo.Arguments = $"{serverExe.Substring(7)} -worldselectpath \"{worldDir}\" -rest-enabled false";
+                    startInfo.Arguments = $"{serverExe.Substring(7)} {args}";
                 }
                 else
                 {
                     startInfo.FileName = serverExe;
-                    startInfo.Arguments = $"-worldselectpath \"{worldDir}\" -rest-enabled false";
+                    startInfo.Arguments = args;
                 }
+
+                TShock.Log.ConsoleInfo($"[WorldGenPlugin] Starting subprocess: {startInfo.FileName} {startInfo.Arguments}");
 
                 process = Process.Start(startInfo);
                 if (process == null)
@@ -236,74 +223,18 @@ namespace WorldGenPlugin
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
 
-                // Feed input commands
-                string inputText = File.ReadAllText(inputFile);
-                process.StandardInput.Write(inputText);
-                process.StandardInput.Flush();
-                process.StandardInput.Close();
-
-                string wldFilename = Path.GetFileName(expectedPath);
-                string home = Environment.GetFolderPath(Environment.SpecialFolder.Personal);
-                if (string.IsNullOrEmpty(home))
-                    home = Environment.GetEnvironmentVariable("HOME") ?? "/root";
-                string[] searchDirs = new[]
+                // Wait up to 10 minutes for generation to complete
+                bool exited = process.WaitForExit(600_000);
+                if (!exited)
                 {
-                    Path.GetDirectoryName(expectedPath),
-                    Path.Combine(home, ".local/share/Terraria/Worlds"),
-                    "/root/.local/share/Terraria/Worlds",
-                    Path.Combine(Main.WorldPath, "Worlds"),
-                    Path.Combine(AppContext.BaseDirectory, "Worlds"),
-                };
-
-                int maxWait = 600;
-                int waited = 0;
-                string foundPath = null;
-
-                while (waited < maxWait)
-                {
-                    if (process.HasExited)
-                        break;
-
-                    Thread.Sleep(2000);
-                    waited += 2;
+                    TShock.Log.ConsoleError("[WorldGenPlugin] Subprocess timed out after 10 minutes, killing.");
+                    try { process.Kill(true); } catch { }
+                    process.WaitForExit(5000);
                 }
 
-                Thread.Sleep(2000);
-
-                try
+                if (File.Exists(expectedPath) && new FileInfo(expectedPath).Length > 0)
                 {
-                    if (!process.HasExited)
-                    {
-                        process.Kill(true);
-                        process.WaitForExit(5000);
-                    }
-                }
-                catch { }
-
-                foreach (string dir in searchDirs)
-                {
-                    if (dir == null) continue;
-                    string candidate = Path.Combine(dir, wldFilename);
-                    if (File.Exists(candidate) && new FileInfo(candidate).Length > 0)
-                    {
-                        foundPath = candidate;
-                        worldCreated = true;
-                        break;
-                    }
-                }
-
-                if (worldCreated)
-                {
-                    if (foundPath != expectedPath)
-                    {
-                        Directory.CreateDirectory(Path.GetDirectoryName(expectedPath));
-                        File.Move(foundPath, expectedPath);
-                        TShock.Log.ConsoleInfo($"[WorldGenPlugin] World found at {foundPath}, moved to {expectedPath}");
-                    }
-                    else
-                    {
-                        TShock.Log.ConsoleInfo($"[WorldGenPlugin] World generated: {expectedPath}");
-                    }
+                    TShock.Log.ConsoleInfo($"[WorldGenPlugin] World generated: {expectedPath}");
                 }
                 else
                 {
@@ -317,12 +248,6 @@ namespace WorldGenPlugin
             }
             finally
             {
-                // Cleanup
-                if (inputFile != null)
-                {
-                    try { File.Delete(inputFile); } catch { }
-                }
-
                 try
                 {
                     if (process != null && !process.HasExited)
